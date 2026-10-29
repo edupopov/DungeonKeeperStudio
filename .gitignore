@@ -1,0 +1,49 @@
+# Unearth
+settings.cfg
+unearthcustomslabs.cfg
+
+custom_slabs.cfg
+
+custom_objects.cfg
+
+unearthdata/tmapa0*
+unearthdata/tmapb0*
+unearthdata/sprite-zip-cache/
+sprite-zip-cache/
+textures
+
+### Godot ###
+.import/
+# Imported translations (automatically generated from CSV files)
+*.translation
+# Mono-specific ignores
+.mono/
+.vs/
+.cursor/
+.claude/
+CLAUDE.md
+userinput.py
+data_*/
+
+# Local game data, personal settings and generated packages
+/Runtime/
+/DungeonKeeperStudio.exe
+/DungeonKeeperStudio.pck
+/backups/
+/Backups-Jogo/
+/Exportados/
+/unearthdata/
+/Studio/TestOutput-*/
+/Studio/test-game-*/
+*.log
+/.vscode/
+/ComparisonImages/
+
+# Only maps created from scratch are approved for public distribution
+/Mapas/*
+!/Mapas/TesteProdutivo-Gold/
+!/Mapas/TesteProdutivo-KeeperFX/
+!/Mapas/README.md
+
+# Upstream publishing automation targets rainlizard's releases and itch.io
+/.github/workflows/main.yml

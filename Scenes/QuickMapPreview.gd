@@ -1,0 +1,222 @@
+extends ColorRect
+onready var oOpenMap = Nodelist.list["oOpenMap"]
+onready var oRNC = Nodelist.list["oRNC"]
+onready var oReadData = Nodelist.list["oReadData"]
+onready var oCamera2D = Nodelist.list["oCamera2D"]
+onready var oMapBrowserTabContainer = Nodelist.list["oMapBrowserTabContainer"]
+onready var oBuffers = Nodelist.list["oBuffers"]
+
+var img = Image.new()
+var tex = ImageTexture.new()
+
+
+#11:
+#if (OwnRNC = true) then
+#Color.Gray
+#else
+#begin
+#if (Own[Y, X] = 5) then
+#Color("$042434")
+#else
+#SlabColours[Own[Y, X]];
+#end;
+#end;
+
+const colourDict = {
+	0: Color.black,
+	2 : Color("241800"),
+	3 : Color("241800"),
+	50 : Color8(32,26,11),
+	
+	1 : Color("605C10"),
+	60 : Color("7C7414"),
+	
+	4: Color("40301C"),
+	5: Color("40301C"),
+	6: Color("40301C"),
+	7: Color("40301C"),
+	8: Color("40301C"),
+	9: Color("40301C"),
+	17: Color("40301C"),
+	19: Color("40301C"),
+	21: Color("40301C"),
+	23: Color("40301C"),
+	25: Color("40301C"),
+	27: Color("40301C"),
+	29: Color("40301C"),
+	31: Color("40301C"),
+	33: Color("40301C"),
+	35: Color("40301C"),
+	37: Color("40301C"),
+	39: Color("40301C"),
+	41: Color("40301C"),
+	
+	10: Color("342404"),
+	12 : Color("381C00"),
+	13 : Color("54403C"),
+	
+	# Portal
+	#14 : Color(1,1,1,1),
+	
+	52 : Color("D890BF"),
+	54 : Color.purple, #Color.fuchsia
+
+	61 : Color8(4,24,6),
+}
+const spoilerColor = Color8(20,16,0) #Color(0.125, 0.125, 0.175, 1.0)
+const doorColour = Color("FC986C")
+var spoiledSlabs = {
+	Slabs.ROCK:null,
+	Slabs.GOLD:null,
+	Slabs.GEMS:null,
+	Slabs.ABYSS:null,
+}
+
+func slab_is_ownable(slabID):
+	if Slabs.data.has(slabID) == false:
+		return false
+	return Slabs.data[slabID][Slabs.IS_OWNABLE] == true
+
+
+func is_neutral_room(slabID, ownership):
+	if ownership != 5:
+		return false
+	return slab_is_ownable(slabID)
+
+
+func is_bedrock(slabID):
+	if slabID == 50:
+		return true
+	if Slabs.data.has(slabID) == false:
+		return false
+	return Slabs.data[slabID][Slabs.NAME] == "HARD_FLOOR"
+
+
+func neutral_color(slabID):
+	if is_bedrock(slabID):
+		return Color8(32,26,11)
+	if Slabs.data.has(slabID) and Slabs.data[slabID][Slabs.IS_SOLID] == true:
+		return Color("241800")
+	return Constants.ownerFloorCol[5]
+
+
+func _ready():
+	visible = false
+	img.create(M.xSize, M.ySize, false, Image.FORMAT_RGB8)
+	tex.create_from_image(img, 0)
+
+
+func update_img(slbFilePath):
+	var hideSpoilers = false
+	if oMapBrowserTabContainer.current_tab == 1: # Play
+		hideSpoilers = true
+	
+	if File.new().file_exists(slbFilePath) == false:
+		print("File not found : " + slbFilePath)
+		return
+	
+	var lofFilePath = ""
+	if File.new().file_exists(slbFilePath.get_basename()+".lof") == true:
+		lofFilePath = slbFilePath.get_basename()+".lof"
+	elif File.new().file_exists(slbFilePath.get_basename()+".LOF") == true:
+		lofFilePath = slbFilePath.get_basename()+".LOF"
+	
+	var lofBuffer = oBuffers.file_path_to_buffer(lofFilePath)
+	var xy = oReadData.read_mapsize_from_lof(lofBuffer)
+	#print(xy)
+	
+	
+	
+	#var CODETIME_START = OS.get_ticks_msec()
+	
+	var ownFilePath = ""
+	if File.new().file_exists(slbFilePath.get_basename()+".own") == true:
+		ownFilePath = slbFilePath.get_basename()+".own"
+	elif File.new().file_exists(slbFilePath.get_basename()+".OWN") == true:
+		ownFilePath = slbFilePath.get_basename()+".OWN"
+	
+	if oRNC.check_for_rnc_compression(slbFilePath) == true: return
+	if oRNC.check_for_rnc_compression(ownFilePath) == true: return
+	
+	var ownBuffer = null
+	if ownFilePath != "":
+		ownBuffer = oBuffers.file_path_to_buffer(ownFilePath)
+		ownBuffer.seek(0)
+	
+	var slbBuffer = oBuffers.file_path_to_buffer(slbFilePath)
+	slbBuffer.seek(0)
+	
+	var slabID
+	var ownership = 5
+	
+	img.create(xy.x, xy.y, false, Image.FORMAT_RGB8)
+	img.lock()
+	for y in xy.y:
+		for x in xy.x:
+			slabID = slbBuffer.get_u8()
+			slbBuffer.get_u8() # skip second byte
+			
+			if ownBuffer != null:
+				var dataWidth = (xy.x*3)+1
+				ownBuffer.seek( (((x*3)+1)+(y*3*dataWidth)))
+				ownership = ownBuffer.get_u8()
+			
+			if hideSpoilers == false:
+				if colourDict.has(slabID):
+					img.set_pixel(x,y,colourDict[slabID])
+				elif Slabs.is_door(slabID):
+					img.set_pixel(x,y,doorColour)
+				else:
+					if slabID == Slabs.CLAIMED_GROUND and ownership != 255:
+						img.set_pixel(x,y,Constants.ownerFloorCol[ownership])
+					elif is_neutral_room(slabID, ownership):
+						img.set_pixel(x,y,Color(1,1,1,1)) # Neutral room. Use shader to flash it.
+					else:
+						if slab_is_ownable(slabID) and ownership != 5:
+							img.set_pixel(x,y,Constants.ownerRoomCol[ownership])
+						else:
+							img.set_pixel(x,y,neutral_color(slabID))
+			else:
+				var pixelHasBeenSet = false
+				if colourDict.has(slabID):
+					if spoiledSlabs.has(slabID) or ownership == 0:
+						img.set_pixel(x,y,colourDict[slabID])
+						pixelHasBeenSet = true
+				elif Slabs.is_door(slabID):
+					if ownership == 0:
+						img.set_pixel(x,y,doorColour)
+						pixelHasBeenSet = true
+				else:
+					if ownership == 0:
+						if slabID == Slabs.CLAIMED_GROUND and ownership != 255 and ownership == 0:
+							img.set_pixel(x, y, Constants.ownerFloorCol[ownership])
+							pixelHasBeenSet = true
+						else:
+							img.set_pixel(x,y,Constants.ownerRoomCol[ownership])
+							pixelHasBeenSet = true
+					elif ownership == 5:
+						if slabID == Slabs.PORTAL or slabID == Slabs.PORTAL_WALL:
+							img.set_pixel(x,y,Color(1,1,1,1)) # Neutral room. Use shader to flash it.
+							pixelHasBeenSet = true
+				
+				if pixelHasBeenSet == false:
+					img.set_pixel(x,y,spoilerColor)
+
+
+	#if ownership < 5:
+	img.unlock()
+	
+	tex.set_data(img)
+	$QuickMapPreviewDisplay.texture = tex
+	$QuickMapPreviewDisplay.rect_size = Vector2(xy.x*96, xy.y*96)
+	#$QuickMapPreviewDisplay.rect_position = Vector2(xy.x*96*0.5, xy.y*96*0.5)
+	
+	$QuickMapBorder.rect_position = Vector2(-96,-96)
+	$QuickMapBorder.rect_size = Vector2((xy.x*96) + (96*2), (xy.y*96) + (96*2))
+	
+	oCamera2D.reset_camera(xy.x, xy.y)
+	#xy.x, xy.y
+	rect_size = Vector2(M.xSize*96, M.ySize*96) # Cover current map in darkness
+	
+	#print('Codetime: ' + str(OS.get_ticks_msec() - CODETIME_START) + 'ms')
+	return OK

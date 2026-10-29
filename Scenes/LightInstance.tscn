@@ -1,0 +1,33 @@
+[gd_scene load_steps=4 format=2]
+
+[ext_resource path="res://images_ui/GUIEDIT-1/PIC26.png" type="Texture" id=1]
+[ext_resource path="res://Scenes/LightInstance.gd" type="Script" id=2]
+
+[sub_resource type="RectangleShape2D" id=1]
+extents = Vector2( 16, 16 )
+
+[node name="LightInstance" type="Node2D" groups=["Instance", "Light"]]
+script = ExtResource( 2 )
+
+[node name="MouseDetection" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="MouseDetection"]
+shape = SubResource( 1 )
+
+[node name="TextureRect" type="TextureRect" parent="."]
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource( 1 )
+stretch_mode = 4
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="VisibilityNotifier2D" type="VisibilityNotifier2D" parent="."]
+rect = Rect2( -32, -32, 64, 64 )
+
+[connection signal="mouse_entered" from="MouseDetection" to="." method="_on_MouseDetection_mouse_entered"]
+[connection signal="mouse_exited" from="MouseDetection" to="." method="_on_MouseDetection_mouse_exited"]
+[connection signal="screen_entered" from="VisibilityNotifier2D" to="." method="_on_VisibilityNotifier2D_screen_entered"]
+[connection signal="screen_exited" from="VisibilityNotifier2D" to="." method="_on_VisibilityNotifier2D_screen_exited"]

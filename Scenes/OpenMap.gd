@@ -1,0 +1,408 @@
+extends Node
+onready var oReadData = Nodelist.list["oReadData"]
+onready var oConfirmDecompression = Nodelist.list["oConfirmDecompression"]
+onready var oMessage = Nodelist.list["oMessage"]
+onready var oEditor = Nodelist.list["oEditor"]
+onready var oRNC = Nodelist.list["oRNC"]
+onready var oCurrentMap = Nodelist.list["oCurrentMap"]
+onready var oUniversalDetails = Nodelist.list["oUniversalDetails"]
+onready var oDynamicMapTree = Nodelist.list["oDynamicMapTree"]
+onready var oGame = Nodelist.list["oGame"]
+onready var oOverheadOwnership = Nodelist.list["oOverheadOwnership"]
+onready var oDataLevelStyle = Nodelist.list["oDataLevelStyle"]
+onready var oCamera2D = Nodelist.list["oCamera2D"]
+onready var oDataClm = Nodelist.list["oDataClm"]
+onready var oTMapLoader = Nodelist.list["oTMapLoader"]
+onready var oUiTools = Nodelist.list["oUiTools"]
+onready var oOverheadGraphics = Nodelist.list["oOverheadGraphics"]
+onready var oPickSlabWindow = Nodelist.list["oPickSlabWindow"]
+onready var oMapBrowser = Nodelist.list["oMapBrowser"]
+onready var oUi = Nodelist.list["oUi"]
+onready var oImageAsMapDialog = Nodelist.list["oImageAsMapDialog"]
+onready var oDataMapName = Nodelist.list["oDataMapName"]
+onready var oMapSettingsWindow = Nodelist.list["oMapSettingsWindow"]
+onready var oDataClmPos = Nodelist.list["oDataClmPos"]
+onready var oScriptMarkers = Nodelist.list["oScriptMarkers"]
+onready var oMenu = Nodelist.list["oMenu"]
+onready var oDataSlab = Nodelist.list["oDataSlab"]
+onready var oDataLiquid = Nodelist.list["oDataLiquid"]
+onready var oTabClmEditor = Nodelist.list["oTabClmEditor"]
+onready var oScriptEditor = Nodelist.list["oScriptEditor"]
+onready var oScriptTextEdit = Nodelist.list["oScriptTextEdit"]
+onready var oDataLof = Nodelist.list["oDataLof"]
+onready var oXSizeLine = Nodelist.list["oXSizeLine"]
+onready var oYSizeLine = Nodelist.list["oYSizeLine"]
+onready var oNewMapWindow = Nodelist.list["oNewMapWindow"]
+onready var oSlabPlacement = Nodelist.list["oSlabPlacement"]
+onready var oDataSlx = Nodelist.list["oDataSlx"]
+onready var oPickThingWindow = Nodelist.list["oPickThingWindow"]
+onready var oCurrentFormat = Nodelist.list["oCurrentFormat"]
+onready var oSetNewFormat = Nodelist.list["oSetNewFormat"]
+onready var oBuffers = Nodelist.list["oBuffers"]
+onready var oUndoStates = Nodelist.list["oUndoStates"]
+onready var oDisplaySlxNumbers = Nodelist.list["oDisplaySlxNumbers"]
+onready var oThingDetails = Nodelist.list["oThingDetails"]
+onready var oInspector = Nodelist.list["oInspector"]
+onready var oGuidelines = Nodelist.list["oGuidelines"]
+onready var oResizeCurrentMapSize = Nodelist.list["oResizeCurrentMapSize"]
+onready var oOwnerSelection = Nodelist.list["oOwnerSelection"]
+onready var oScriptGenerator = Nodelist.list["oScriptGenerator"]
+onready var oOnlyOwnership = Nodelist.list["oOnlyOwnership"]
+onready var oCfgLoader = Nodelist.list["oCfgLoader"]
+onready var oTMapNames = Nodelist.list["oTMapNames"]
+onready var oSlabsetWindow = Nodelist.list["oSlabsetWindow"]
+onready var oConfigFileManager = Nodelist.list["oConfigFileManager"]
+onready var oCfgEditor = Nodelist.list["oCfgEditor"]
+onready var oMapBackups = Nodelist.list["oMapBackups"]
+onready var oInstances = Nodelist.list["oInstances"]
+onready var oInstanceList = Nodelist.list["oInstanceList"]
+onready var oTabTileset = Nodelist.list["oTabTileset"]
+onready var oConfirmDiscardChanges = Nodelist.list["oConfirmDiscardChanges"]
+
+
+var TOTAL_TIME_TO_OPEN_MAP
+
+var compressedFiles = []
+var ALWAYS_DECOMPRESS = false # Default to false
+var pending_open = []
+
+func start():
+	get_tree().connect("files_dropped", self, "_on_files_dropped")
+	
+	if oGame.EXECUTABLE_PATH == "": return # Silently wait for user to set executable path. No need to show an error.
+	
+	if OS.get_cmdline_args():
+		# FILE ASSOCIATION
+		var cmdLine = OS.get_cmdline_args()
+		
+		open_map(cmdLine[0])
+	else:
+		if OS.has_feature("standalone") == false:
+			#open_map("C:/Games/Dungeon Keeper GOG/levels/MAP00001.SLB")
+			#open_map("C:/Games/Dungeon Keeper/levels/deepdngn/map00084.slb")
+			open_map("C:/Games/Dungeon Keeper/campgns/bbk/map12001.slb")
+			#open_map("C:/Games/Dungeon Keeper/levels/personal/map00001.slb")
+			#open_map("C:/Games/Dungeon Keeper/campgns/dk2/map00200.slb")
+			#open_map("C:/Games/Dungeon Keeper/levels/blazeend/map00001.slb")
+			#open_map("C:/Games/Dungeon Keeper/levels/traphouse/map15416.slb")
+		else:
+			# initialize a cleared map
+			oCurrentMap.clear_map()
+			
+			for i in 2:
+				yield(get_tree(),'idle_frame')
+			oMapBrowser._on_BrowseMapsMenu_pressed()
+
+func _on_files_dropped(_files, _screen):
+	open_map(_files[0])
+
+func open_map(filePath, options = {}):
+	var studio = get_node_or_null("../Studio")
+	if studio != null and filePath != "":
+		filePath = studio.prepare_open_path(filePath)
+		if filePath == "":
+			return false
+	if oSlabPlacement.block_while_generating():
+		return false
+	# Prevent opening any maps under any circumstance if you haven't set the dk exe yet. (Fix to launching via file association)
+	if oGame.EXECUTABLE_PATH == "":
+		oMessage.quick("Error: Cannot open map because game executable is not set. Set in File -> Preferences")
+		return
+
+	# a filePath of "" means make a blank map.
+
+	# This will replace \ with /, just for the sake of fixing ugliness
+	filePath = filePath.replace("\\", "/")
+	var map = filePath.get_basename()
+	var mapFilePaths = get_accompanying_files(map)
+
+	# Decompress before asking to discard changes, so cancelling either dialog leaves the current map and its edited state intact
+	compressedFiles.clear()
+	for i in mapFilePaths.values():
+		if oRNC.check_for_rnc_compression(i[oCurrentMap.PATHSTRING]) == true:
+			compressedFiles.append(i[oCurrentMap.PATHSTRING])
+	if compressedFiles.empty() == false:
+		pending_open = [filePath, options]
+		if ALWAYS_DECOMPRESS == true:
+			_on_ConfirmDecompression_confirmed()
+		else:
+			var dialogText = "In order to open this map, these files must be decompressed: \n\n"
+			for i in compressedFiles:
+				dialogText += i + '\n'
+			dialogText += "\n" + "This will result in overwriting, continue?"
+			oConfirmDecompression.set_dialog_text(dialogText)
+			Utils.popup_centered(oConfirmDecompression)
+		return false
+
+	if oEditor.mapHasBeenEdited:
+		pending_open = [filePath, options]
+		if filePath == "":
+			oConfirmDiscardChanges.dialog_text = "Are you sure you want to discard changes and create a new map?"
+		else:
+			oConfirmDiscardChanges.dialog_text = "Are you sure you want to discard changes and open this map?"
+		Utils.popup_centered(oConfirmDiscardChanges)
+		return false
+	var show_opened_message = options.get("show_opened_message", true)
+	var reset_camera = options.get("reset_camera", true)
+	oCurrentMap.loaded_from_backup = options.get("loaded_from_backup", false) or oMapBackups.is_backup_path(filePath)
+
+	# Prevent opening any maps under any circumstance if textures haven't been loaded. (Fix to launching via file association)
+#	if oTMapLoader.texturesLoadedState != oTMapLoader.LOADING_SUCCESS:
+#		oMessage.quick("Error: Cannot open map because textures haven't been loaded")
+#		return
+	
+	print("----------- Opening map ------------")
+	TOTAL_TIME_TO_OPEN_MAP = OS.get_ticks_msec()
+	
+	# Always begin by clearing map
+	oTabTileset.clear_modified_tileset()
+	oCurrentMap.clear_map()
+	
+	# Open all map file types
+	oCurrentMap.currentFilePaths = mapFilePaths
+	oCurrentMap.DKScript_enabled = oCurrentMap.currentFilePaths.has("TXT")
+	oCurrentMap.LuaScript_enabled = oCurrentMap.currentFilePaths.has("LUA")
+	
+	# Set map format early so CfgLoader knows which format to use
+	if map == "": # If it's a new map, then map format is set to the format you selected on New Map window
+		oCurrentFormat.selected = oSetNewFormat.selected
+	else:
+		if has_map_file("TNGFX") == true:
+			oCurrentFormat.selected = Constants.KfxFormat
+		else:
+			oCurrentFormat.selected = Constants.OldFormat
+	
+	oCfgLoader.start(filePath)
+	oDataLof.use_campaign_map_size(filePath)
+	
+	# Load files
+	if oNewMapWindow.visible == true:
+		oDataLof.use_size(oXSizeLine.text.to_int(), oYSizeLine.text.to_int())
+		print("NEW MAPSIZE = " + str(M.xSize) + " " + str(M.ySize))
+	
+	var mapReadCount = 0
+	var mapReadTime = 0
+	var missingMapFiles = []
+	oInstances.bulk_loading = true
+	for EXT in oBuffers.FILE_TYPES:
+		if oCurrentMap.currentFilePaths.has(EXT) == true:
+			if should_read_file(EXT) == false:
+				continue
+			
+			var readPath = oCurrentMap.currentFilePaths[EXT][oCurrentMap.PATHSTRING]
+			var readStart = OS.get_ticks_msec()
+			if oBuffers.read(readPath, EXT.to_upper(), false):
+				mapReadCount += 1
+				mapReadTime += OS.get_ticks_msec() - readStart
+		else:
+			missingMapFiles.append(EXT)
+			oBuffers.new_blank(EXT.to_upper())
+			
+			# Assign name data to any that's missing
+			if EXT == "LIF":
+				var mapName = oDataMapName.get_special_lif_text(filePath)
+				if mapName != "":
+					print("LIF was missing so assign the special name: " + mapName)
+					oDataMapName.set_map_name(mapName)
+			
+			# Some maps can function without WLB files. So build them here.
+			# Generate WLB values from SLB. This is dependent on SLB being ordered before WLB inside Filetypes.FILE_TYPES
+			if EXT == "WLB":
+				for ySlab in M.ySize:
+					for xSlab in M.xSize:
+						var slabID = oDataSlab.get_cell(xSlab, ySlab)
+						oDataLiquid.set_cell(xSlab, ySlab, Slabs.data[slabID][Slabs.LIQUID_TYPE])
+	for doorID in get_tree().get_nodes_in_group("Door"):
+		if doorID.doorLocked != 0:
+			doorID.update_spinning_key()
+	oInstances.bulk_loading = false
+	oInstanceList.update_if_visible()
+	if mapReadCount > 0:
+		print('Read map files: ' + str(mapReadCount) + ' files in ' + str(mapReadTime) + 'ms')
+	if missingMapFiles.empty() == false:
+		print('Missing map files, created blanks: ' + ", ".join(missingMapFiles))
+	
+	continue_load(map)
+	continue_load_openmap(map, show_opened_message, reset_camera)
+	return true
+
+
+func has_map_file(fileType):
+	if oCurrentMap.currentFilePaths.has(fileType) == false:
+		return false
+	var filePath = oCurrentMap.currentFilePaths[fileType][oCurrentMap.PATHSTRING]
+	return File.new().file_exists(filePath)
+
+
+func should_read_file(fileType):
+	var replacementFiles = {
+		"LIF": "LOF",
+		"TNG": "TNGFX",
+		"APT": "APTFX",
+		"LGT": "LGTFX"
+	}
+	if oCurrentFormat.selected == Constants.OldFormat:
+		return ["TNGFX", "APTFX", "LGTFX"].has(fileType) == false
+	elif oCurrentFormat.selected == Constants.KfxFormat:
+		if replacementFiles.has(fileType) == true:
+			return has_map_file(replacementFiles[fileType]) == false
+	return true
+
+func continue_load(map):
+	# initialize_editor_components
+	oPickThingWindow.initialize_thing_grid_items()
+	oEditor.update_boundaries()
+	oScriptEditor.initialize_for_new_map()
+	oOverheadOwnership.start()
+	oScriptMarkers.start()
+	
+	oTMapLoader.start()
+	oTMapNames.update_texture_map_names() # Update names after tmap loader has started
+	if map != "":
+		_warn_missing_tilesets()
+	oOverheadGraphics.update_full_overhead_map() # 'Display fields' are created for each texture loaded
+	oTMapLoader.apply_texture_pack()
+
+	oDataClm.count_filled_clm_entries()
+
+	# finalize_map_opening
+	oEditor.set_view_2d()
+
+	# Update for Undo
+
+	oDisplaySlxNumbers.update()
+
+	if oResizeCurrentMapSize.visible == true:
+		oResizeCurrentMapSize._on_ResizeCurrentMapSize_about_to_show()
+
+	if is_instance_valid(oInspector.inspectingInstance):
+		oInspector.deselect()
+
+
+func _warn_missing_tilesets():
+	var referencedTilesets = {int(oDataLevelStyle.data): true}
+	var slxData = oDataSlx.slxImgData.get_data()
+	for i in range(0, slxData.size(), 3):
+		if slxData[i] > 0:
+			referencedTilesets[slxData[i] - 1] = true
+	var missingTilesets = []
+	for tilesetID in referencedTilesets:
+		var missing = tilesetID < 0 or tilesetID >= oTMapLoader.cachedTextures.size()
+		if missing == false:
+			var textures = oTMapLoader.cachedTextures[tilesetID]
+			missing = textures == null or textures[0] == null or textures[1] == null
+		if missing:
+			missingTilesets.append(tilesetID)
+	if missingTilesets.empty() == false:
+		missingTilesets.sort()
+		var missingFilenames = PoolStringArray()
+		for tilesetID in missingTilesets:
+			missingFilenames.append("tmapa" + str(tilesetID).pad_zeros(3) + ".dat")
+		oMessage.big("Missing Tileset", "Missing tilesets used by this map: " + ", ".join(missingFilenames))
+
+
+func continue_load_openmap(map, show_opened_message = true, reset_camera = true):
+	oEditor.mapHasBeenEdited = false
+	oOwnerSelection.update_ownership_head_icons()
+	oScriptGenerator.update_options_based_on_mapformat()
+	oPickSlabWindow.add_slabs()
+	oOnlyOwnership.update_grid_items()
+	oDynamicMapTree.highlight_current_map()
+	oCurrentMap.set_path_and_title(map)
+	oUndoStates.clear_history()
+	oGuidelines.update()
+	oMapSettingsWindow.visible = false
+	oSlabsetWindow.visible = false
+	oCfgEditor.visible = false
+	
+	# Update config file paths in oCurrentMap
+	oCurrentMap.update_config_paths(true)
+	
+	# Clear local config file tracking when opening a new map
+	# This is now handled by CfgLoader calling oConfigFileManager.clear_paths()
+	# oConfigFileManager.clear_local_files() was removed
+	
+	if map == "":
+		oMessage.quick('New map')
+	elif show_opened_message:
+		oMessage.quick('Opened map')
+	
+	# When opening a map, be sure that column 0 is empty. Otherwise apply a fix.
+	if oDataClm.permanent[0] != 0 or oDataClm.cubes[0] != [0,0,0,0, 0,0,0,0]:
+		# Make column 0 empty while preserving the column that was there.
+		if oDataClm.move_column_zero_to_unused_index():
+			oEditor.mapHasBeenEdited = true
+			oMessage.quick("Fixed column index 0, re-save your map.")
+		else:
+			oMessage.big("Warning", "Column index 0 is not empty, but there is no free column entry to move it to, so it was left unchanged.")
+	oDataClm.store_default_data()
+	
+	if reset_camera:
+		for i in 3:
+			yield(get_tree(),'idle_frame')
+		oCamera2D.reset_camera(M.xSize, M.ySize)
+	print('TOTAL time to open map: '+str(OS.get_ticks_msec()-TOTAL_TIME_TO_OPEN_MAP)+'ms')
+	print("----------------------------------------------")
+
+
+func _on_ConfirmDecompression_confirmed():
+	print('Attempting to decompress...')
+	
+	var failedFiles = []
+	for path in compressedFiles:
+		var CODETIME_START = OS.get_ticks_msec()
+		var result = oRNC.decompress(path)
+		if result.empty():
+			printerr("Failed to decompress: ", path)
+			failedFiles.append(path)
+		else:
+			print('RNC decompressing ' + path + " : " + str(OS.get_ticks_msec() - CODETIME_START) + 'ms')
+
+	# Retrying would hit the same compressed files again and loop forever
+	if failedFiles.empty() == false:
+		oMessage.big("Error", "Could not decompress these files, so the map was not opened. They may be read-only or corrupted:\n\n" + "\n".join(failedFiles))
+		return
+
+	# Retry opening the map
+	open_map(pending_open[0], pending_open[1])
+
+
+func _on_ConfirmDiscardChanges_confirmed():
+	if pending_open.empty():
+		return
+	var open_args = pending_open
+	pending_open = []
+	oEditor.mapHasBeenEdited = false
+	if open_args[0] == "":
+		oNewMapWindow.create_new_map()
+	else:
+		open_map(open_args[0], open_args[1])
+
+
+func _on_FileDialogOpen_file_selected(path):
+	open_map(path)
+
+
+func get_accompanying_files(map):
+	var CODETIME_START = OS.get_ticks_msec()
+	var baseDir = map.get_base_dir()
+	var mapName = map.get_file().get_basename() # Get the map name without the extension
+	
+	var dict = {}
+	var dir = Directory.new()
+	if dir.open(baseDir) == OK:
+		dir.list_dir_begin(true, false)
+
+		var fileName = dir.get_next()
+		while fileName != "":
+			if dir.current_is_dir() == false:
+				var fileBaseName = fileName.get_basename() # Get the file name without the extension
+				if fileBaseName.to_upper() == mapName.to_upper():
+					var EXT = fileName.get_extension().to_upper()
+					if oBuffers.FILE_TYPES.has(EXT):
+						var fullPath = baseDir.plus_file(fileName)
+						var getModifiedTime = File.new().get_modified_time(fullPath)
+						dict[EXT] = [fullPath, getModifiedTime]
+			fileName = dir.get_next()
+	print('get_accompanying_files: ' + str(OS.get_ticks_msec() - CODETIME_START) + 'ms')
+	return dict

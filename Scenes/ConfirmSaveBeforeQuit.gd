@@ -1,0 +1,40 @@
+extends WindowDialog
+onready var oFileDialogSaveAs = Nodelist.list["oFileDialogSaveAs"]
+onready var oSaveMap = Nodelist.list["oSaveMap"]
+onready var oCurrentMap = Nodelist.list["oCurrentMap"]
+
+func _ready():
+	connect("about_to_show", self, "_on_about_to_show")
+
+func _on_ButtonConfirmExitSave_pressed():
+	# Save or save as based on whether there is a path
+	oSaveMap.queueExit = true
+	var studio = Nodelist.list["oMain"].get_node_or_null("Studio")
+	if studio != null and not studio.advanced.pressed:
+		studio.save_working_map()
+		return
+	if oCurrentMap.path == "" or oCurrentMap.loaded_from_backup == true:
+		Utils.popup_centered(oFileDialogSaveAs)
+	else:
+		oSaveMap.clicked_save_on_menu()
+
+
+func _on_ButtonConfirmExitDontSave_pressed():
+	get_tree().quit()
+
+func _on_ButtonConfirmExitCancel_pressed():
+	hide()
+
+func _on_about_to_show():
+	yield(get_tree(),'idle_frame')
+	$"%ButtonConfirmExitSave".grab_focus()
+
+func _input(event):
+	if visible == false: return
+	if event is InputEventKey and event.pressed == true:
+		if get_focus_owner() is LineEdit: return # If typing some text into somewhere
+		match event.scancode:
+			KEY_Y:
+				$"%ButtonConfirmExitSave".emit_signal("pressed")
+			KEY_N:
+				$"%ButtonConfirmExitDontSave".emit_signal("pressed")

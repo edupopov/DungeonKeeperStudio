@@ -1,0 +1,257 @@
+extends 'res://Class/ClmClass.gd'
+onready var oGame = Nodelist.list["oGame"]
+onready var oBuffers = Nodelist.list["oBuffers"]
+
+var column_count = 8192
+var reserved_columnset = 4096
+var highest_columnset_id_from_fxdata = 0
+
+var utilized = []
+var orientation = []
+var solidMask = []
+var permanent = []
+var lintel = []
+var height = []
+var cubes = []
+var floorTexture = []
+
+var default_data = {}
+var loaded_data = {}
+
+var columnsContainingOwnedCubes = {}
+var columnsContainingRngCubes = {}
+
+# Strangely, slabs.clm is missing the second 4 bytes.
+# map0000x.clm : 49,160 bytes. first 4 bytes contains column_count, second 4 bytes are ???, then comes the column data.
+# slabs.clm : 49,156 bytes. first 4 bytes contains column_count, then comes the column data.
+
+
+func import_toml_columnset(filePath):
+	var cfg = Utils.load_toml_file(filePath)
+	if cfg == null:
+		return
+	
+	var is_from_fxdata = "fxdata" in filePath
+	var max_column_id_found = 0
+	
+	for section in cfg.get_sections():
+		if section.begins_with("column"):
+			var columnIndex = int(section)
+			
+			if is_from_fxdata:
+				max_column_id_found = max(max_column_id_found, columnIndex)
+			
+			utilized[columnIndex] = 0 #cfg.get_value(section, "Utilized", 0)
+			permanent[columnIndex] = 1 #cfg.get_value(section, "Permanent", 0)
+			lintel[columnIndex] = get_columnset_value(cfg, section, "Lintel", 0)
+			height[columnIndex] = get_columnset_value(cfg, section, "Height", 0)
+			solidMask[columnIndex] = get_columnset_value(cfg, section, "SolidMask", 0)
+			floorTexture[columnIndex] = get_columnset_value(cfg, section, "FloorTexture", 0)
+			orientation[columnIndex] = get_columnset_value(cfg, section, "Orientation", 0)
+			cubes[columnIndex] = get_columnset_value(cfg, section, "Cubes", [0,0,0,0, 0,0,0,0])
+	
+	if is_from_fxdata:
+		highest_columnset_id_from_fxdata = max_column_id_found
+		store_default_data()
+	update_cube_lists()
+
+func get_columnset_value(cfg, section, key, default_value):
+	if cfg.has_section_key(section, key):
+		return cfg.get_value(section, key)
+	var key_lower = key.to_lower()
+	for section_key in cfg.get_section_keys(section):
+		if section_key.to_lower() == key_lower:
+			return cfg.get_value(section, section_key)
+	return default_value
+
+func load_default_original_columnset():
+	var filePath = Utils.case_insensitive_file(oGame.DK_DATA_DIRECTORY, "SLABS", "CLM")
+	var buffer = oBuffers.file_path_to_buffer(filePath)
+	
+	buffer.seek(0)
+	var numberOfClmEntries = buffer.get_u16()
+	
+	buffer.seek(4) # For reading slabs.clm. (THIS IS DIFFERENT TO READING MAPS)
+	for entry in numberOfClmEntries:
+		utilized[entry] = buffer.get_u16() # 0-1
+		
+		var specialByte = buffer.get_u8() # 2
+		
+		var get_permanent = specialByte & 1
+		var get_lintel = (specialByte >> 1) & 7
+		var get_height = (specialByte >> 4) & 15
+		permanent[entry] = get_permanent
+		lintel[entry] = get_lintel
+		height[entry] = get_height
+		
+		solidMask[entry] = buffer.get_u16() # 3-4
+		floorTexture[entry] = buffer.get_u16() # 5-6
+		orientation[entry] = buffer.get_u8() # 7
+		
+		for cubeNumber in 8:
+			cubes[entry][cubeNumber] = buffer.get_u16() # 8-23
+	
+	store_default_data()
+	update_cube_lists()
+
+func store_default_data():
+	default_data["utilized"] = utilized.duplicate(true)
+	default_data["orientation"] = orientation.duplicate(true)
+	default_data["solidMask"] = solidMask.duplicate(true)
+	default_data["permanent"] = permanent.duplicate(true)
+	default_data["lintel"] = lintel.duplicate(true)
+	default_data["height"] = height.duplicate(true)
+	default_data["cubes"] = cubes.duplicate(true)
+	default_data["floorTexture"] = floorTexture.duplicate(true)
+
+func store_loaded_data():
+	loaded_data["utilized"] = utilized.duplicate(true)
+	loaded_data["orientation"] = orientation.duplicate(true)
+	loaded_data["solidMask"] = solidMask.duplicate(true)
+	loaded_data["permanent"] = permanent.duplicate(true)
+	loaded_data["lintel"] = lintel.duplicate(true)
+	loaded_data["height"] = height.duplicate(true)
+	loaded_data["cubes"] = cubes.duplicate(true)
+	loaded_data["floorTexture"] = floorTexture.duplicate(true)
+
+func has_changes_since_load():
+	if loaded_data.empty():
+		return find_all_different_columns().empty() == false
+	return (
+		utilized != loaded_data["utilized"]
+		or orientation != loaded_data["orientation"]
+		or solidMask != loaded_data["solidMask"]
+		or permanent != loaded_data["permanent"]
+		or lintel != loaded_data["lintel"]
+		or height != loaded_data["height"]
+		or cubes != loaded_data["cubes"]
+		or floorTexture != loaded_data["floorTexture"]
+	)
+
+
+func update_cube_lists():
+	var ownedTime = update_list_of_columns_that_contain_owned_cubes()
+	var rngTime = update_list_of_columns_that_contain_rng_cubes()
+	if cubes.empty() == false:
+		print('Column cube lists updated: ' + str(ownedTime + rngTime) + 'ms (owned ' + str(ownedTime) + 'ms, rng ' + str(rngTime) + 'ms)')
+
+
+func export_toml_columnset(filePath, column_diffs = null):
+	if column_diffs == null:
+		column_diffs = find_all_different_columns()
+	if column_diffs.empty():
+		return false
+	
+	var lines = PoolStringArray()
+	for i in column_diffs:
+		lines.append('[column' + str(i) +']')
+		lines.append('Lintel = ' + str(lintel[i]))
+		lines.append('Height = ' + str(height[i]))
+		lines.append('SolidMask = ' + str(solidMask[i]))
+		lines.append('FloorTexture = ' + str(floorTexture[i]))
+		lines.append('Orientation = ' + str(orientation[i]))
+		lines.append('Cubes = ' + str(cubes[i]))
+		lines.append('')
+
+	var textFile = File.new()
+	var text = Utils.preserve_toml_comments(filePath, "\n".join(lines))
+	if textFile.open(filePath, File.WRITE) != OK:
+		var oMessage = Nodelist.list["oMessage"]
+		oMessage.big("Error", "Couldn't save file, maybe try saving to another directory.")
+		return false
+	textFile.store_string(text)
+	
+	textFile.close()
+	print("Saved: " + filePath)
+	return true
+
+
+
+
+func find_all_different_columns():
+	var diff_indices = []
+	for i in column_count:
+		if is_column_different(i):
+			diff_indices.append(i)
+	return diff_indices
+
+func is_column_different(index):
+#	if utilized[index] != default_data["utilized"][index]:
+#		return true
+#	if permanent[index] != default_data["permanent"][index]:
+#		return true
+	if lintel[index] != default_data["lintel"][index]:
+		return true
+	if height[index] != default_data["height"][index]:
+		return true
+	if solidMask[index] != default_data["solidMask"][index]:
+		return true
+	if floorTexture[index] != default_data["floorTexture"][index]:
+		return true
+	if orientation[index] != default_data["orientation"][index]:
+		return true
+	if cubes[index] != default_data["cubes"][index]:
+		return true
+	return false
+
+
+func update_list_of_columns_that_contain_rng_cubes():
+	columnsContainingRngCubes.clear()
+	if cubes.empty():
+		return 0
+	
+	var CODETIME_START = OS.get_ticks_msec()
+	
+	var reverseRngCubeLookup = {}
+	for key in Cube.rngCube.keys():
+		for cubeID in Cube.rngCube[key]:
+			reverseRngCubeLookup[cubeID] = key
+	
+	for clmIndex in column_count:
+		var rngCubeTypesInColumn = {}
+		
+		for cubeID in cubes[clmIndex]:
+			if reverseRngCubeLookup.has(cubeID):
+				var stringNameOfRngType = reverseRngCubeLookup[cubeID]
+				rngCubeTypesInColumn[stringNameOfRngType] = true
+		
+		if rngCubeTypesInColumn:
+			columnsContainingRngCubes[clmIndex] = rngCubeTypesInColumn.keys()
+	
+	return OS.get_ticks_msec() - CODETIME_START
+
+func clear_all_column_data():
+	.clear_all_column_data()
+	highest_columnset_id_from_fxdata = 0
+	loaded_data = {}
+
+
+func update_list_of_columns_that_contain_owned_cubes():
+	columnsContainingOwnedCubes.clear()
+	if cubes.empty():
+		return 0
+	
+	var CODETIME_START = OS.get_ticks_msec()
+	
+	var reverseOwnedCubeLookup = {}
+	for key in Cube.ownedCube.keys():
+		for cubeID in Cube.ownedCube[key]:
+			reverseOwnedCubeLookup[cubeID] = key
+	
+	for clmIndex in column_count:
+		var ownedCubeTypesInColumn = {}
+		
+		for cubeID in cubes[clmIndex]:
+			if reverseOwnedCubeLookup.has(cubeID):
+				var stringNameOfOwnedType = reverseOwnedCubeLookup[cubeID]
+				ownedCubeTypesInColumn[stringNameOfOwnedType] = true
+		
+		if ownedCubeTypesInColumn:
+			columnsContainingOwnedCubes[clmIndex] = ownedCubeTypesInColumn.keys()
+	
+	return OS.get_ticks_msec() - CODETIME_START
+
+func is_valid_column_id_for_navigation(columnID):
+	if highest_columnset_id_from_fxdata <= 0:
+		return true
+	return columnID <= highest_columnset_id_from_fxdata or columnID >= reserved_columnset

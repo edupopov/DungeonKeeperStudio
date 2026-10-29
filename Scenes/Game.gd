@@ -1,0 +1,344 @@
+extends Node
+onready var oEditor = Nodelist.list["oEditor"]
+onready var oCurrentMap = Nodelist.list["oCurrentMap"]
+onready var oRayCastBlockMap = Nodelist.list["oRayCastBlockMap"]
+onready var oSaveMap = Nodelist.list["oSaveMap"]
+onready var oMessage = Nodelist.list["oMessage"]
+onready var oCmdLineConsole = Nodelist.list["oCmdLineConsole"]
+onready var oCmdLineConsoleArg = Nodelist.list["oCmdLineConsoleArg"]
+onready var oCmdLineExecute = Nodelist.list["oCmdLineExecute"]
+onready var oKeeperFXDetection = Nodelist.list["oKeeperFXDetection"]
+onready var oConfigFileManager = Nodelist.list["oConfigFileManager"]
+
+var EXECUTABLE_PATH = ""
+var GAME_DIRECTORY = ""
+var DK_DATA_DIRECTORY = ""
+var DK_FXDATA_DIRECTORY = ""
+var DK_LEVELS_DIRECTORY = ""
+var DK_CAMPGNS_DIRECTORY = ""
+var DK_MULTIPLAYER_DIRECTORY = ""
+#var KEEPERFX_VERSION_INT = 0 # This is set in set_paths() when EXECUTABLE_PATH is set.
+var KEEPERFX_VERSION_STRING = "0"
+#const KEEPERFX_VERSION_REQUIRED_INT = 0503372 #0.5.0.3372
+#var nosound = true
+#var cheats = true
+#var gameSpeed = 25
+
+var COMMAND_LINE = ""
+var COMMAND_LINE_CONSOLE = ""
+var COMMAND_LINE_CONSOLE_ARG = ""
+var PACKETSAVE = false
+# Boolean KeeperFX launch flags (setting key == flag without the dash, e.g. "nosound" -> -nosound).
+# Full list of flags: https://github.com/dkfans/keeperfx/wiki/Command-Line-Options
+const CMDLINE_FLAGS_ORDER = ["skipheartzoom", "alex", "show_game_turns", "framestep", "nomods", "nosound", "dbgpathfind", "dbgshots", "altinput", "timer"]
+const CMDLINE_ALWAYS_ALLOWED = ["alex", "nosound"] # These also work with the original game, the rest need KeeperFX
+var CMDLINE_FLAGS = {}
+const KEEPERFX_MAP_ROOTS = ["levels", "multiplayer", "campgns"]
+
+func _init():
+	for flag in CMDLINE_FLAGS_ORDER:
+		CMDLINE_FLAGS[flag] = false
+	CMDLINE_FLAGS["alex"] = true # Enabled by default
+
+func keeperfx_is_installed():
+	var path = EXECUTABLE_PATH.get_file().to_lower()
+	if path == "keeperfx.exe" or path == "keeperfx_hvlog.exe" or path == "keeperfx":
+		return true
+	else:
+		return false
+
+
+func is_map_root(path):
+	if path == null or path == "":
+		return false
+	var folderName = path.replace('\\','/').trim_suffix("/").get_file().to_lower()
+	return KEEPERFX_MAP_ROOTS.has(folderName)
+
+
+func is_playable_dir(path):
+	if path == null or path == "":
+		return false
+	var normalizedPath = path.replace('\\','/').trim_suffix("/")
+	if keeperfx_is_installed() == true:
+		return is_map_root(normalizedPath.get_base_dir())
+	return normalizedPath.get_file().to_lower() == "levels"
+
+
+func get_map_root(path):
+	if path == null or path == "":
+		return ""
+	return path.replace('\\','/').get_base_dir().get_base_dir().get_file().to_lower()
+
+
+func is_multiplayer_map(path):
+	return get_map_root(path) == "multiplayer"
+
+
+func has_multiplayer_root():
+	return DK_MULTIPLAYER_DIRECTORY != ""
+
+
+func get_campaign_path(mapPath, campaignName):
+	var mapRoot = get_map_root(mapPath)
+	if keeperfx_is_installed() == true and has_multiplayer_root() == true and KEEPERFX_MAP_ROOTS.has(mapRoot) == true:
+		return mapRoot.plus_file(campaignName).replace('\\','/')
+	return campaignName
+
+
+func _input(event):
+	if Input.is_action_just_pressed("SaveAndPlay"):
+		menu_play_clicked()
+
+func launch_game(mainCommands, launchMessage = "Launching..."):
+	var printOutput = []
+	OS.execute(COMMAND_LINE_CONSOLE, [COMMAND_LINE_CONSOLE_ARG, mainCommands], false, printOutput) # Make sure "false" is set so Unearth doesn't freeze
+	print(printOutput)
+	oMessage.quick(launchMessage)
+
+
+func set_paths(path):
+	if path == null: path = ""
+	EXECUTABLE_PATH = path
+	GAME_DIRECTORY = path.get_base_dir()
+	set_keeperfx_version()
+	DK_DATA_DIRECTORY = ""
+	DK_FXDATA_DIRECTORY = ""
+	DK_LEVELS_DIRECTORY = ""
+	DK_CAMPGNS_DIRECTORY = ""
+	DK_MULTIPLAYER_DIRECTORY = ""
+	
+	for i in get_main_subdirectories(GAME_DIRECTORY): # Directories only
+		match i.to_upper():
+			"DATA": DK_DATA_DIRECTORY = GAME_DIRECTORY.plus_file(i)
+			"FXDATA": DK_FXDATA_DIRECTORY = GAME_DIRECTORY.plus_file(i)
+			"LEVELS": DK_LEVELS_DIRECTORY = GAME_DIRECTORY.plus_file(i)
+			"CAMPGNS": DK_CAMPGNS_DIRECTORY = GAME_DIRECTORY.plus_file(i)
+			"MULTIPLAYER": DK_MULTIPLAYER_DIRECTORY = GAME_DIRECTORY.plus_file(i)
+	
+	if keeperfx_is_installed() == true:
+		oKeeperFXDetection.text = "KeeperFX detected. " + "(Version " + KEEPERFX_VERSION_STRING + ")"
+		oKeeperFXDetection.set("custom_colors/font_color", Color(0.5,1.0,0.5,1))
+		oKeeperFXDetection.visible = true
+	else:
+		oKeeperFXDetection.text = "KeeperFX not detected"
+		oKeeperFXDetection.set("custom_colors/font_color", Color(1.0,0.5,0.5,1))
+		oKeeperFXDetection.visible = true
+	reconstruct_command_line()
+
+func _on_CmdLinePacketsave_toggled(button_pressed):
+	Settings.set_setting("packetsave", button_pressed)
+	reconstruct_command_line()
+
+func _on_CmdLineSkipHeartZoom_toggled(button_pressed):
+	Settings.set_setting("skipheartzoom", button_pressed)
+	if button_pressed == true:
+		oMessage.big("Warning", "Skipping the Dungeon Heart zoom changes the opening game turns and can hide map scripting or action point problems during testing.")
+	reconstruct_command_line()
+
+func _on_CmdLineFlag_toggled(button_pressed, flag):
+	Settings.set_setting(flag, button_pressed)
+	reconstruct_command_line()
+
+func reconstruct_command_line():
+	print('Constructing command line...')
+	# Keep in mind Linux and Windows both want different quotation marks ' "
+	match OS.get_name():
+		"Windows":
+			COMMAND_LINE_CONSOLE = 'cmd'
+			COMMAND_LINE_CONSOLE_ARG = '/C'
+		"X11":
+			COMMAND_LINE_CONSOLE = "/bin/sh"
+			COMMAND_LINE_CONSOLE_ARG = "-c"
+	oCmdLineConsole.text = COMMAND_LINE_CONSOLE
+	oCmdLineConsoleArg.text = COMMAND_LINE_CONSOLE_ARG
+	
+	COMMAND_LINE = cmdline(oCurrentMap.path, false)
+	oCmdLineExecute.text = COMMAND_LINE
+	yield(get_tree(), "idle_frame")
+	yield(get_tree(), "idle_frame")
+	var scroll = oCmdLineExecute.get_parent().get_parent()
+	scroll.scroll_horizontal = scroll.get_h_scrollbar().max_value
+
+func cmdline(mapPath, packetLoad):
+	# Keep in mind Linux and Windows both want different quotation marks ' "
+	var constructString = ""
+	match OS.get_name():
+		"Windows":
+			constructString += 'cd /D '
+			constructString += '"' + GAME_DIRECTORY + '"'
+			constructString += ' && '
+			constructString += '"' + EXECUTABLE_PATH.get_file() + '"'
+		"X11":
+			constructString += "cd "
+			constructString += "'" + GAME_DIRECTORY + "'"
+			constructString += " && "
+			# Native Linux KeeperFX runs directly (no Wine). Only fall back to Wine
+			# for an actual Windows .exe (e.g. running the Windows build under Wine).
+			if EXECUTABLE_PATH.get_extension().to_lower() == "exe":
+				constructString += "wine "
+				constructString += "'" + EXECUTABLE_PATH.get_file() + "'"
+			else:
+				constructString += "'./" + EXECUTABLE_PATH.get_file() + "'"
+	
+	# Delete -level xxx and -campaign xxx from the command line
+	var arrayOfWords = constructString.split(" ")
+	for i in arrayOfWords.size():
+		match arrayOfWords[i]:
+			"-level":
+				arrayOfWords[i] = ""
+				if i+1 < arrayOfWords.size():
+					arrayOfWords[i+1] = ""
+			"-campaign":
+				arrayOfWords[i] = ""
+				if i+1 < arrayOfWords.size():
+					arrayOfWords[i+1] = ""
+	constructString = ""
+	for word in arrayOfWords:
+		if word != "":
+			constructString += " " + word
+	
+	# Add level and campaign to command line
+	
+	var newMapNumber = mapPath.get_file().to_upper().trim_prefix("MAP")
+	var newCampaignName = mapPath.get_base_dir().get_file()
+	if is_multiplayer_map(mapPath) == true:
+		constructString += " -1player"
+	constructString += " -level " + newMapNumber
+	if newCampaignName != "levels": # The older DK structure stored all their maps in /levels/ folder and did not use campaign command.
+		var mappackCfgFilename = oConfigFileManager.current_mappack_cfg_filename
+		if mappackCfgFilename != "":
+			var campaignName = mappackCfgFilename.get_basename()
+			constructString += " -campaign " + get_campaign_path(mapPath, campaignName)
+		else:
+			constructString += " -campaign " + get_campaign_path(mapPath, newCampaignName)
+	
+	constructString = constructString.strip_edges(true,true)
+	
+	for flag in CMDLINE_FLAGS_ORDER:
+		if CMDLINE_FLAGS.get(flag, false) == true:
+			if CMDLINE_ALWAYS_ALLOWED.has(flag) == true or keeperfx_is_installed() == true:
+				constructString += " -" + flag
+	var packetArguments = get_packet_arguments(mapPath, packetLoad)
+	if packetArguments != "":
+		constructString += " " + packetArguments
+	
+	return constructString
+
+func get_packet_arguments(mapPath, packetLoad):
+	if keeperfx_is_installed() == false:
+		return ""
+	if packetLoad == true:
+		return "-packetload " + get_packet_filename(mapPath)
+	if PACKETSAVE == true:
+		return "-packetsave " + get_packet_filename(mapPath)
+	return ""
+
+func get_packet_filename(mapPath):
+	return "unearth_auto_packet.pck"
+
+func menu_play_clicked(packetLoad = false):
+	if oCurrentMap.loaded_from_backup == true:
+		oMessage.quick("Use Save As before playing a loaded backup.")
+		return false
+	if oEditor.mapHasBeenEdited == true:
+		if oSaveMap.save_map(oCurrentMap.path) == false:
+			return false
+	var commandLine = COMMAND_LINE
+	var launchMessage = "Launching..."
+	if packetLoad == true:
+		commandLine = cmdline(oCurrentMap.path, true)
+		launchMessage = "Loading Packetsave"
+	launch_game(commandLine, launchMessage)
+
+func get_main_subdirectories(path):
+	var array = []
+	var dir = Directory.new()
+	if dir.open(path) == OK:
+		dir.list_dir_begin(true, false)
+		var fileName = dir.get_next()
+		while fileName != "":
+			if dir.current_is_dir() == true:
+				array.append(fileName)
+			fileName = dir.get_next()
+	return array
+
+func test_write_permissions():
+	# Test write permissions of DK directory
+	var testPath = EXECUTABLE_PATH.get_base_dir().plus_file('.studio-writecheck-%s.tmp' % OS.get_ticks_msec())
+	if File.new().file_exists(testPath):
+		oMessage.big("Verificacao de escrita", "O arquivo temporario ja existe. Tente novamente.")
+		return ERR_ALREADY_EXISTS
+	
+	var file = File.new()
+	var err = file.open(testPath, File.WRITE)
+	if err == OK:
+		file.store_string("Testing write permissions.")
+	file.close()
+	
+	var dir = Directory.new()
+	if dir.file_exists(testPath) == true: # Ensure any files being removed are definitely files and never directories
+		dir.remove(testPath)
+	
+	if err != OK:
+		if OS.get_name() == "X11":
+			oMessage.big("Error", "There are no write permissions for your Dungeon Keeper directory.")
+		if OS.get_name() == "Windows":
+			oMessage.big("Error", "There are no write permissions for your Dungeon Keeper directory. Maybe try moving your Dungeon Keeper folder elsewhere, then choose the executable again.")
+	return err
+
+func set_keeperfx_version():
+	var output = []
+
+	match OS.get_name():
+		"Windows":
+			var powershell_script = "[System.Diagnostics.FileVersionInfo]::GetVersionInfo('%s').FileVersion" % EXECUTABLE_PATH
+			OS.execute("powershell.exe", ["-Command", powershell_script], true, output, true)
+		"X11":
+			var script = ""
+			script += "cd " + EXECUTABLE_PATH.get_base_dir() + ";"
+			script += "exiftool -ProductVersion -n keeperfx.exe | awk -F ': ' '{print $2}'"
+			var _exit_code = OS.execute("bash", ["-c", script], true, output, true)
+			#print("Exit code: ", exit_code)
+			#print("Output: ", output)
+			#print(script)
+			if output.size() >= 1:
+				output[0] = output[0].replace("Product Version", "")
+				output[0] = output[0].replace(":", "")
+
+	if output.size() >= 1:
+		KEEPERFX_VERSION_STRING = output[0].strip_edges()
+	else:
+		KEEPERFX_VERSION_STRING = "Undetected"
+
+#func load_command_line_from_settings(COMMAND_LINE):
+#	COMMAND_LINE = COMMAND_LINE.replace("%DIR%", GAME_DIRECTORY)
+#	COMMAND_LINE = COMMAND_LINE.replace("%EXE%", EXECUTABLE_PATH.get_file())
+#
+#func EDITED_COMMAND_LINE(lineEditText):
+#	COMMAND_LINE = lineEditText.replace(GAME_DIRECTORY, "%DIR%")
+#	COMMAND_LINE = lineEditText.replace(EXECUTABLE_PATH.get_file(), "%EXE%")
+#	Settings.set_setting("play_command_line", COMMAND_LINE)
+
+
+#func EDIT_COMMAND_LINE():
+
+#
+#	var arguments = ""
+#	if cheats == true:
+#		arguments += " -alex"
+#	if nosound == true:
+#		arguments += " -nosound"
+#	arguments += " -fps " + str(gameSpeed)
+#	arguments += ' -level ' + levelNumber
+#
+#	var commands = ""
+#	commands += 'cd /D ' + '"' + GAME_DIRECTORY + '"'
+#	commands += " && "
+#	commands += EXECUTABLE_PATH.get_file() + arguments
+#
+#	print(commands)
+#	OS.execute('cmd', ['/C', commands], false)
+	
+	#OS.execute('cmd', ['/C', ], false)
+
+#F:\Games\Dungeon Keeper\

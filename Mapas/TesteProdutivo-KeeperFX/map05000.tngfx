@@ -1,0 +1,626 @@
+[common]
+ThingsCount = 54
+
+[thing0]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 5
+ParentTile = 3215
+Orientation = 0
+SubtileX = [211, 128]
+SubtileY = [114, 64]
+SubtileZ = [2, 224]
+
+[thing1]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_RED"
+Subtype = 111
+Ownership = 0
+ParentTile = 3382
+Orientation = 0
+SubtileX = [202, 128]
+SubtileY = [118, 128]
+SubtileZ = [2, 0]
+
+[thing2]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_RED"
+Subtype = 111
+Ownership = 0
+ParentTile = 3384
+Orientation = 0
+SubtileX = [208, 128]
+SubtileY = [118, 128]
+SubtileZ = [2, 0]
+
+[thing3]
+ThingType = "Object"
+SubtypeStringID = "SOUL_CONTAINER"
+Subtype = 5
+Ownership = 0
+ParentTile = 3468
+Orientation = 0
+SubtileX = [205, 128]
+SubtileY = [121, 128]
+SubtileZ = [3, 0]
+
+[thing4]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_RED"
+Subtype = 111
+Ownership = 0
+ParentTile = 3552
+Orientation = 0
+SubtileX = [202, 128]
+SubtileY = [124, 128]
+SubtileZ = [2, 0]
+
+[thing5]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_RED"
+Subtype = 111
+Ownership = 0
+ParentTile = 3554
+Orientation = 0
+SubtileX = [208, 128]
+SubtileY = [124, 128]
+SubtileZ = [2, 0]
+
+[thing6]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_BLUE"
+Subtype = 120
+Ownership = 1
+ParentTile = 3670
+Orientation = 0
+SubtileX = [46, 128]
+SubtileY = [130, 128]
+SubtileZ = [2, 0]
+
+[thing7]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_BLUE"
+Subtype = 120
+Ownership = 1
+ParentTile = 3672
+Orientation = 0
+SubtileX = [52, 128]
+SubtileY = [130, 128]
+SubtileZ = [2, 0]
+
+[thing8]
+ThingType = "Object"
+SubtypeStringID = "SOUL_CONTAINER"
+Subtype = 5
+Ownership = 1
+ParentTile = 3756
+Orientation = 0
+SubtileX = [49, 128]
+SubtileY = [133, 128]
+SubtileZ = [3, 0]
+
+[thing9]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_BLUE"
+Subtype = 120
+Ownership = 1
+ParentTile = 3840
+Orientation = 0
+SubtileX = [46, 128]
+SubtileY = [136, 128]
+SubtileZ = [2, 0]
+
+[thing10]
+ThingType = "Object"
+SubtypeStringID = "HEARTFLAME_BLUE"
+Subtype = 120
+Ownership = 1
+ParentTile = 3842
+Orientation = 0
+SubtileX = [52, 128]
+SubtileY = [136, 128]
+SubtileZ = [2, 0]
+
+[thing11]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 5
+ParentTile = 4010
+Orientation = 0
+SubtileX = [46, 128]
+SubtileY = [140, 192]
+SubtileZ = [2, 224]
+
+[thing12]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 0
+ParentTile = 3378
+Orientation = 0
+SubtileX = [190, 128]
+SubtileY = [118, 128]
+SubtileZ = [1, 0]
+
+[thing13]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 0
+ParentTile = 3380
+Orientation = 0
+SubtileX = [196, 128]
+SubtileY = [118, 128]
+SubtileZ = [1, 0]
+
+[thing14]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 0
+ParentTile = 3548
+Orientation = 0
+SubtileX = [190, 128]
+SubtileY = [124, 128]
+SubtileZ = [1, 0]
+
+[thing15]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 0
+ParentTile = 3550
+Orientation = 0
+SubtileX = [196, 128]
+SubtileY = [124, 128]
+SubtileZ = [1, 0]
+
+[thing16]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 3714
+Orientation = 0
+SubtileX = [178, 224]
+SubtileY = [130, 224]
+SubtileZ = [3, 32]
+
+[thing17]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 3716
+Orientation = 0
+SubtileX = [184, 32]
+SubtileY = [130, 224]
+SubtileZ = [3, 32]
+
+[thing18]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 3884
+Orientation = 0
+SubtileX = [178, 224]
+SubtileY = [136, 32]
+SubtileZ = [3, 32]
+
+[thing19]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 3886
+Orientation = 0
+SubtileX = [184, 32]
+SubtileY = [136, 32]
+SubtileZ = [3, 32]
+
+[thing20]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 4058
+Orientation = 0
+SubtileX = [190, 224]
+SubtileY = [142, 224]
+SubtileZ = [3, 0]
+
+[thing21]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 4060
+Orientation = 0
+SubtileX = [196, 32]
+SubtileY = [142, 224]
+SubtileZ = [3, 0]
+
+[thing22]
+ThingType = "Object"
+SubtypeStringID = "TRAINING_POST"
+Subtype = 31
+Ownership = 0
+ParentTile = 4144
+Orientation = 0
+SubtileX = [193, 96]
+SubtileY = [145, 128]
+SubtileZ = [1, 0]
+
+[thing23]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 4228
+Orientation = 0
+SubtileX = [190, 224]
+SubtileY = [148, 32]
+SubtileZ = [3, 0]
+
+[thing24]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 0
+ParentTile = 4230
+Orientation = 0
+SubtileX = [196, 32]
+SubtileY = [148, 32]
+SubtileZ = [3, 0]
+
+[thing25]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 3416
+Orientation = 0
+SubtileX = [51, 64]
+SubtileY = [121, 128]
+SubtileZ = [2, 224]
+
+[thing26]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 1
+ParentTile = 3674
+Orientation = 0
+SubtileX = [58, 128]
+SubtileY = [130, 128]
+SubtileZ = [1, 0]
+
+[thing27]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 1
+ParentTile = 3676
+Orientation = 0
+SubtileX = [64, 128]
+SubtileY = [130, 128]
+SubtileZ = [1, 0]
+
+[thing28]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 1
+ParentTile = 3844
+Orientation = 0
+SubtileX = [58, 128]
+SubtileY = [136, 128]
+SubtileZ = [1, 0]
+
+[thing29]
+ThingType = "Object"
+SubtypeStringID = "CANDLESTCK"
+Subtype = 28
+Ownership = 1
+ParentTile = 3846
+Orientation = 0
+SubtileX = [64, 128]
+SubtileY = [136, 128]
+SubtileZ = [1, 0]
+
+[thing30]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 3338
+Orientation = 0
+SubtileX = [70, 224]
+SubtileY = [118, 224]
+SubtileZ = [3, 32]
+
+[thing31]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 3340
+Orientation = 0
+SubtileX = [76, 32]
+SubtileY = [118, 224]
+SubtileZ = [3, 32]
+
+[thing32]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 3508
+Orientation = 0
+SubtileX = [70, 224]
+SubtileY = [124, 32]
+SubtileZ = [3, 32]
+
+[thing33]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 3510
+Orientation = 0
+SubtileX = [76, 32]
+SubtileY = [124, 32]
+SubtileZ = [3, 32]
+
+[thing34]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 2994
+Orientation = 0
+SubtileX = [58, 224]
+SubtileY = [106, 224]
+SubtileZ = [3, 0]
+
+[thing35]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 2996
+Orientation = 0
+SubtileX = [64, 32]
+SubtileY = [106, 224]
+SubtileZ = [3, 0]
+
+[thing36]
+ThingType = "Object"
+SubtypeStringID = "TRAINING_POST"
+Subtype = 31
+Ownership = 1
+ParentTile = 3080
+Orientation = 0
+SubtileX = [61, 96]
+SubtileY = [109, 128]
+SubtileZ = [1, 0]
+
+[thing37]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 3164
+Orientation = 0
+SubtileX = [58, 224]
+SubtileY = [112, 32]
+SubtileZ = [3, 0]
+
+[thing38]
+ThingType = "Object"
+SubtypeStringID = "TORCH"
+Subtype = 2
+Ownership = 1
+ParentTile = 3166
+Orientation = 0
+SubtileX = [64, 32]
+SubtileY = [112, 32]
+SubtileZ = [3, 0]
+
+[thing39]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 0
+Index = 1
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [199, 128]
+SubtileY = [115, 128]
+SubtileZ = [1, 0]
+
+[thing40]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 0
+Index = 2
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [199, 128]
+SubtileY = [127, 128]
+SubtileZ = [1, 0]
+
+[thing41]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 0
+Index = 3
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [211, 128]
+SubtileY = [115, 128]
+SubtileZ = [1, 0]
+
+[thing42]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 0
+Index = 4
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [211, 128]
+SubtileY = [127, 128]
+SubtileZ = [1, 0]
+
+[thing43]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 1
+Index = 5
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [43, 128]
+SubtileY = [127, 128]
+SubtileZ = [1, 0]
+
+[thing44]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 1
+Index = 6
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [43, 128]
+SubtileY = [139, 128]
+SubtileZ = [1, 0]
+
+[thing45]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 1
+Index = 7
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [55, 128]
+SubtileY = [127, 128]
+SubtileZ = [1, 0]
+
+[thing46]
+ThingType = "Creature"
+SubtypeStringID = "IMP"
+Subtype = 23
+Ownership = 1
+Index = 8
+CreatureLevel = 1
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [55, 128]
+SubtileY = [139, 128]
+SubtileZ = [1, 0]
+
+[thing47]
+ThingType = "Creature"
+SubtypeStringID = "BUG"
+Subtype = 24
+Ownership = 5
+Index = 9
+CreatureLevel = 2
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [193, 128]
+SubtileY = [133, 128]
+SubtileZ = [1, 0]
+
+[thing48]
+ThingType = "Creature"
+SubtypeStringID = "BUG"
+Subtype = 24
+Ownership = 5
+Index = 10
+CreatureLevel = 2
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [193, 128]
+SubtileY = [145, 128]
+SubtileZ = [1, 0]
+
+[thing49]
+ThingType = "Creature"
+SubtypeStringID = "SORCEROR"
+Subtype = 21
+Ownership = 5
+Index = 11
+CreatureLevel = 3
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [181, 128]
+SubtileY = [145, 128]
+SubtileZ = [4, 0]
+
+[thing50]
+ThingType = "Creature"
+SubtypeStringID = "BILE_DEMON"
+Subtype = 22
+Ownership = 5
+Index = 12
+CreatureLevel = 2
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [181, 128]
+SubtileY = [133, 128]
+SubtileZ = [0, 0]
+
+[thing51]
+ThingType = "Creature"
+SubtypeStringID = "BUG"
+Subtype = 24
+Ownership = 5
+Index = 13
+CreatureLevel = 2
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [61, 128]
+SubtileY = [121, 128]
+SubtileZ = [1, 0]
+
+[thing52]
+ThingType = "Creature"
+SubtypeStringID = "BUG"
+Subtype = 24
+Ownership = 5
+Index = 14
+CreatureLevel = 2
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [61, 128]
+SubtileY = [109, 128]
+SubtileZ = [1, 0]
+
+[thing53]
+ThingType = "Creature"
+SubtypeStringID = "SORCEROR"
+Subtype = 21
+Ownership = 5
+Index = 15
+CreatureLevel = 3
+CreatureGold = 0
+CreatureInitialHealth = 100
+SubtileX = [73, 128]
+SubtileY = [109, 128]
+SubtileZ = [4, 0]

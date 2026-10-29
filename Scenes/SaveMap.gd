@@ -1,0 +1,409 @@
+extends Node
+
+onready var oGame = Nodelist.list["oGame"]
+onready var oMessage = Nodelist.list["oMessage"]
+onready var oEditor = Nodelist.list["oEditor"]
+onready var oCurrentMap = Nodelist.list["oCurrentMap"]
+onready var oMapSettingsWindow = Nodelist.list["oMapSettingsWindow"]
+onready var oDataScript = Nodelist.list["oDataScript"]
+onready var oDataLua = Nodelist.list["oDataLua"]
+onready var oScriptEditor = Nodelist.list["oScriptEditor"]
+onready var oMenu = Nodelist.list["oMenu"]
+onready var oCurrentFormat = Nodelist.list["oCurrentFormat"]
+onready var oDataClm = Nodelist.list["oDataClm"]
+onready var oBuffers = Nodelist.list["oBuffers"]
+onready var oMenuButtonFile = Nodelist.list["oMenuButtonFile"]
+onready var oSlabsetWindow = Nodelist.list["oSlabsetWindow"]
+onready var oConfigFileManager = Nodelist.list["oConfigFileManager"]
+onready var oCfgLoader = Nodelist.list["oCfgLoader"]
+onready var oDataLof = Nodelist.list["oDataLof"]
+onready var oMapBackups = Nodelist.list["oMapBackups"]
+onready var oTabTileset = Nodelist.list["oTabTileset"]
+onready var oSlabPlacement = Nodelist.list["oSlabPlacement"]
+
+var queueExit = false
+
+func _input(event):
+	if event.is_action_pressed("save"):
+		oMenu.pressed_save_keyboard_shortcut()
+
+func save_map(filePath):
+	var studio = get_node_or_null("../Studio")
+	if studio != null and not studio.allow_save(filePath):
+		queueExit = false
+		return false
+	var map_basename_with_ext = filePath.get_file()
+	var map_filename_no_ext = map_basename_with_ext.get_basename()
+	var map_base_dir = filePath.get_base_dir()
+	var SAVETIME_START = OS.get_ticks_msec()
+	if oSlabPlacement.block_while_generating():
+		queueExit = false
+		return false
+
+	if oMapBackups.backup_existing_map_files(filePath) == false:
+		oMessage.big("Error", "Saving cancelled because the existing map files could not be backed up. Try moving Unearth to a writable directory.")
+		queueExit = false
+		return false
+	
+	var script_definitions = [
+		{"key": "TXT", "enabled": oCurrentMap.DKScript_enabled, "ext": ".txt", "display": "DKScript"},
+		{"key": "LUA", "enabled": oCurrentMap.LuaScript_enabled, "ext": ".lua", "display": "LuaScript"}
+	]
+	for script_def in script_definitions:
+		if script_def.enabled == false:
+			delete_script_file(map_filename_no_ext, map_base_dir, script_def, filePath)
+
+	var existing_map_files = {}
+	var map_directory = Directory.new()
+	if map_directory.open(map_base_dir) == OK:
+		map_directory.list_dir_begin(true, false)
+		var existing_file_name = map_directory.get_next()
+		while existing_file_name != "":
+			if map_directory.current_is_dir() == false and existing_file_name.get_basename().to_upper() == map_filename_no_ext.to_upper():
+				var extension = existing_file_name.get_extension().to_upper()
+				if existing_map_files.has(extension) == false:
+					existing_map_files[extension] = []
+				existing_map_files[extension].append(map_base_dir.plus_file(existing_file_name))
+			existing_file_name = map_directory.get_next()
+		map_directory.list_dir_end()
+	delete_existing_files(existing_map_files)
+
+	oDataClm.update_all_utilized()
+	var writeFailure = false
+	var mapWriteCount = 0
+	var mapWriteTime = 0
+	for EXT in oBuffers.FILE_TYPES:
+		var existing_paths = existing_map_files.get(EXT, [])
+		var saveToFilePath = existing_paths[0] if existing_paths.empty() == false else map_base_dir.plus_file(map_filename_no_ext + "." + EXT.to_lower())
+		if OS.get_name() == "X11" and existing_paths.size() > 1:
+			for duplicate_path in existing_paths.slice(1, existing_paths.size() - 1):
+				print("Deleted duplicate map file: " + duplicate_path.get_file())
+				map_directory.remove(duplicate_path.get_file())
+		var should_process = oBuffers.should_process_file_type(EXT)
+		var write_succeeded = false
+		if should_process:
+			var writeStart = OS.get_ticks_msec()
+			if oBuffers.write(saveToFilePath, EXT.to_upper(), false) != OK:
+				writeFailure = true
+			else:
+				write_succeeded = true
+				mapWriteCount += 1
+				mapWriteTime += OS.get_ticks_msec() - writeStart
+		
+		var should_record_file = should_process or oCurrentMap.currentFilePaths.has(EXT)
+		var save_file_exists = write_succeeded or existing_paths.empty() == false
+		if save_file_exists and should_record_file:
+			var modTime = File.new().get_modified_time(saveToFilePath)
+			oCurrentMap.currentFilePaths[EXT] = [saveToFilePath, modTime]
+		elif oCurrentMap.currentFilePaths.has(EXT):
+			var path_info = oCurrentMap.currentFilePaths[EXT]
+			var is_valid_path = typeof(path_info) == TYPE_ARRAY and path_info.size() > oCurrentMap.PATHSTRING and File.new().file_exists(path_info[oCurrentMap.PATHSTRING])
+			if should_process == false and is_valid_path == false:
+				oCurrentMap.currentFilePaths.erase(EXT)
+			elif should_process:
+				oCurrentMap.currentFilePaths.erase(EXT)
+	if mapWriteCount > 0:
+		print('Wrote map files: ' + str(mapWriteCount) + ' files in ' + str(mapWriteTime) + 'ms')
+
+	if oCurrentFormat.selected == Constants.KfxFormat:
+		var campaignFile = oCfgLoader.get_campaign_boss_file(filePath)
+		if oDataLof.write_campaign_map_size(filePath, campaignFile) == false:
+			writeFailure = true
+		else:
+			oCfgLoader.load_campaign_boss_file(filePath)
+
+	if writeFailure:
+		oMessage.big("Error", "Saving failed. Try saving to a different directory.")
+		queueExit = false
+		return false
+
+	if oConfigFileManager.copy_current_map_files(oCurrentMap.path, filePath) == false:
+		oMessage.big("Error", "Saving failed while copying map config files. Try saving to a different directory.")
+		queueExit = false
+		return false
+	if oTabTileset.save_modified_tilesets(map_filename_no_ext, map_base_dir) == false:
+		oMessage.big("Error", "Saving failed while writing map tileset files. Try saving to a different directory.")
+		queueExit = false
+		return false
+	oCurrentMap.update_config_paths(false)
+
+	if save_config_files(map_filename_no_ext, map_base_dir) == false:
+		oMessage.big("Error", "Saving failed while writing map config files. Try saving to a different directory.")
+		queueExit = false
+		return false
+
+	print('Total time to save: ' + str(OS.get_ticks_msec() - SAVETIME_START) + 'ms')
+	if oDataScript.data == "" and oDataLua.data == "":
+		oMessage.big("Warning", "Your map has no script. Open Script > DKScript and create the DKScript file to add the default setup.")
+	oCurrentMap.set_path_and_title(filePath)
+	oCurrentMap.loaded_from_backup = false
+	oCurrentMap.update_config_paths(true)
+	oEditor.mapHasBeenEdited = false
+	oScriptEditor.set_script_as_edited(false)
+	oDataClm.store_default_data()
+	Slabset.store_loaded_data()
+	Columnset.store_loaded_data()
+	oConfigFileManager.store_loaded_rules_data()
+	oMapSettingsWindow.visible = false
+	if studio != null:
+		if not studio.record_working_save(filePath):
+			queueExit = false
+			oEditor.mapHasBeenEdited = true
+			return false
+	oMessage.quick('Mapa salvo na copia e no jogo' if studio != null and studio.sync_enabled and not studio.suppress_sync else 'Saved map')
+	if queueExit:
+		get_tree().quit()
+	return true
+
+
+func is_same_map(map_file_path):
+	if oCurrentMap.path == "":
+		return false
+	if oCurrentMap.path.get_base_dir().to_upper() != map_file_path.get_base_dir().to_upper():
+		return false
+	return oCurrentMap.path.get_file().get_basename().to_upper() == map_file_path.get_file().get_basename().to_upper()
+
+
+func get_script_path(map_filename_no_ext, map_base_dir, file_ext):
+	var filename = map_filename_no_ext + file_ext
+	var precise_path = Utils.case_insensitive_file(map_base_dir, filename.get_basename(), filename.get_extension())
+	if precise_path != "":
+		return precise_path
+	return map_base_dir.plus_file(filename)
+
+
+func delete_script_file(map_filename_no_ext, map_base_dir, script_def, map_file_path):
+	var target_path = get_script_path(map_filename_no_ext, map_base_dir, script_def.ext)
+	var tracked_path = ""
+	if oCurrentMap.currentFilePaths.has(script_def.key) == true:
+		var path_info = oCurrentMap.currentFilePaths[script_def.key]
+		if typeof(path_info) == TYPE_ARRAY and path_info.size() > oCurrentMap.PATHSTRING:
+			tracked_path = path_info[oCurrentMap.PATHSTRING]
+	var should_delete = tracked_path != "" and tracked_path.to_upper() == target_path.to_upper()
+	if should_delete == false:
+		var has_tracked_script = oCurrentMap.currentFilePaths.has(script_def.key)
+		if is_same_map(map_file_path) == false and has_tracked_script == true:
+			oCurrentMap.currentFilePaths.erase(script_def.key)
+		return
+	if File.new().file_exists(target_path) == false:
+		oCurrentMap.currentFilePaths.erase(script_def.key)
+		return
+	var err_trash = OS.move_to_trash(ProjectSettings.globalize_path(target_path))
+	if err_trash == OK:
+		print("Moved disabled " + script_def.display + " file to trash: " + target_path.get_file())
+		oCurrentMap.currentFilePaths.erase(script_def.key)
+	else:
+		var msg = "Error trashing " + script_def.display + " file: " + target_path.get_file()
+		oMessage.quick(msg)
+		print(msg + " Code: " + str(err_trash))
+
+
+func delete_existing_files(existing_map_files):
+	var file_types_to_delete = []
+	if oCurrentFormat.selected == Constants.OldFormat:
+		file_types_to_delete = ["TNGFX", "APTFX", "LGTFX"]
+	elif oCurrentFormat.selected == Constants.KfxFormat:
+		file_types_to_delete = ["LIF", "TNG", "APT", "LGT"]
+	var dir = Directory.new()
+	for file_extension in file_types_to_delete:
+		for file_path in existing_map_files.get(file_extension, []):
+			print("Deleted due to format conflict: " + file_path.get_file())
+			dir.remove(file_path)
+		existing_map_files.erase(file_extension)
+		if oCurrentMap.currentFilePaths.has(file_extension) == true:
+			oCurrentMap.currentFilePaths.erase(file_extension)
+
+
+func clicked_save_on_menu():
+	return save_map(oCurrentMap.path)
+
+
+func save_config_files(map_filename_no_ext, map_base_dir):
+	for file_type in ["slabset.toml", "columnset.toml"]:
+		if save_toml_file(file_type, map_filename_no_ext, map_base_dir) == false:
+			return false
+	return save_cubes_cfg_file("cubes.cfg", map_filename_no_ext, map_base_dir) and save_rules_cfg_file("rules.cfg", map_filename_no_ext, map_base_dir)
+
+
+func save_toml_file(file_type, map_filename_no_ext, map_base_dir):
+	var save_target = get_config_save_target(file_type, map_filename_no_ext, map_base_dir)
+	var file_path = save_target[0]
+	var config_type = save_target[1]
+	
+	var export_success = false
+	match file_type:
+		"slabset.toml":
+			if config_needs_saving(Slabset.has_changes_since_load()) == false:
+				return true
+			var list_of_modified_slabs = Slabset.get_all_modified_slabs()
+			if list_of_modified_slabs.empty():
+				return delete_config_file_if_exists(file_path, file_type)
+			export_success = Slabset.export_toml_slabset(file_path, list_of_modified_slabs)
+		"columnset.toml":
+			if config_needs_saving(Columnset.has_changes_since_load()) == false:
+				return true
+			var column_diffs = Columnset.find_all_different_columns()
+			if column_diffs.empty():
+				return delete_config_file_if_exists(file_path, file_type)
+			export_success = Columnset.export_toml_columnset(file_path, column_diffs)
+	
+	if export_success:
+		track_saved_config_file(file_path, file_type, config_type)
+	return export_success
+
+
+# Don't rewrite (or trash) a possibly shared campaign config unless it was edited. Backups are restored in full, so they always write their configs.
+func config_needs_saving(changed_since_load):
+	return changed_since_load or oCurrentMap.loaded_from_backup
+
+
+func save_rules_cfg_file(file_type, map_filename_no_ext, map_base_dir):
+	if config_needs_saving(oConfigFileManager.rules_changed_since_load()) == false:
+		return true
+	var save_target = get_config_save_target(file_type, map_filename_no_ext, map_base_dir)
+	var file_path = save_target[0]
+	var config_type = save_target[1]
+	
+	var export_success = export_rules_cfg(file_path)
+
+	if export_success == null:
+		return false
+	if export_success:
+		track_saved_config_file(file_path, file_type, config_type)
+	else:
+		return delete_config_file_if_exists(file_path, file_type)
+	return true
+
+
+func save_cubes_cfg_file(file_type, map_filename_no_ext, map_base_dir):
+	if config_needs_saving(Cube.modified_since_load) == false:
+		return true
+	var save_target = get_config_save_target(file_type, map_filename_no_ext, map_base_dir)
+	var file_path = save_target[0]
+	if Cube.export_cfg_cubes(file_path):
+		track_saved_config_file(file_path, file_type, save_target[1])
+		Cube.modified_since_load = false
+		return true
+	if Cube.get_all_export_cube_ids().empty() and delete_config_file_if_exists(file_path, file_type):
+		Cube.modified_since_load = false
+		return true
+	return false
+
+
+func get_config_save_target(file_type, map_filename_no_ext, map_base_dir):
+	var existing_file_path = ""
+	if oCurrentMap.loaded_from_backup == false:
+		match file_type:
+			"slabset.toml": existing_file_path = oCurrentMap.existing_slabset_file
+			"columnset.toml": existing_file_path = oCurrentMap.existing_columnset_file
+			"rules.cfg": existing_file_path = oCurrentMap.existing_rules_file
+			"cubes.cfg": existing_file_path = oCurrentMap.existing_cubes_file
+	var config_type = oConfigFileManager.LOAD_CFG_CURRENT_MAP
+	if existing_file_path != "":
+		if existing_file_path.get_file().to_lower() == file_type:
+			config_type = oConfigFileManager.LOAD_CFG_CAMPAIGN
+		return [existing_file_path, config_type]
+	return [map_base_dir.plus_file(map_filename_no_ext + "." + file_type), config_type]
+
+
+func track_saved_config_file(file_path, file_type, config_type):
+	oConfigFileManager.notify_file_created(file_path, file_type, config_type)
+	print("Saved " + file_type.get_basename() + " to: " + file_path)
+
+
+func export_rules_cfg(file_path):
+	if not oConfigFileManager.current_data.has("rules.cfg") or oConfigFileManager.current_data["rules.cfg"].empty():
+		return false
+	
+	var has_any_changes = false
+	var sections_to_export = {}
+	var rules_data = oConfigFileManager.current_data["rules.cfg"]
+	
+	for section_name in rules_data.keys():
+		var section_data = rules_data[section_name]
+		
+		if section_name == "research" or section_name == "sacrifices":
+			if oConfigFileManager.is_section_different(section_name):
+				sections_to_export[section_name] = section_data
+				has_any_changes = true
+		else:
+			var modified_keys = {}
+			if section_data is Dictionary:
+				for key in section_data.keys():
+					# Keys missing from fxdata (such as differently-cased keys) can only come from campaign/map files, so keep them
+					if oConfigFileManager.is_item_different(section_name, key) or oConfigFileManager.is_item_missing_from_default(section_name, key):
+						modified_keys[key] = section_data[key]
+						has_any_changes = true
+			if not modified_keys.empty():
+				sections_to_export[section_name] = modified_keys
+	
+	if not has_any_changes:
+		return false
+
+	var file = File.new()
+	if file.open(file_path, File.WRITE) != OK:
+		return null
+	
+	for section_name in sections_to_export.keys():
+		file.store_line("[" + section_name + "]")
+		var section_data = sections_to_export[section_name]
+		
+		if section_name == "research" and section_data is Array:
+			for item in section_data:
+				if item is Array and item.size() >= 3:
+					var research_type = str(item[0])
+					var research_item = str(item[1])
+					var research_cost = str(item[2])
+					file.store_line("Research = " + research_type + " " + research_item + " " + research_cost)
+		elif section_name == "sacrifices" and section_data is Array:
+			for item in section_data:
+				if item is Array and item.size() >= 2:
+					var command = str(item[0])
+					var result = str(item[1])
+					var ingredients = []
+					for i in range(2, item.size()):
+						ingredients.append(str(item[i]))
+					if ingredients.size() > 0:
+						var ingredients_text = " ".join(ingredients)
+						file.store_line(command + " = " + result + " " + ingredients_text)
+					else:
+						file.store_line(command + " = " + result)
+		elif section_data is Dictionary:
+			for key in section_data.keys():
+				var value = section_data[key]
+				if value is Array:
+					if value.empty():
+						file.store_line(key + " = ")
+					else:
+						var str_values = []
+						for v in value:
+							str_values.append(str(v))
+						file.store_line(key + " = " + " ".join(str_values))
+				else:
+					file.store_line(key + " = " + str(value))
+		
+		file.store_line("")
+	
+	file.close()
+	return true
+
+
+func delete_config_file_if_exists(file_path, file_type):
+	if File.new().file_exists(file_path) == false:
+		return true
+	if file_type.ends_with(".toml"):
+		var comments = Utils.get_toml_comments(file_path)
+		if comments.empty() == false:
+			var file = File.new()
+			if file.open(file_path, File.WRITE) != OK:
+				return false
+			file.store_string("\n".join(comments) + "\n")
+			file.close()
+			return true
+	var err_trash = OS.move_to_trash(ProjectSettings.globalize_path(file_path))
+	if err_trash != OK:
+		print("Error trashing " + file_type + " file: " + file_path.get_file() + " Code: " + str(err_trash))
+		return false
+	print("Moved unmodified " + file_type + " file to trash: " + file_path.get_file())
+	oConfigFileManager.notify_file_deleted(file_path, file_type)
+	return true

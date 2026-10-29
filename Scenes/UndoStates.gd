@@ -1,0 +1,143 @@
+extends Node
+
+onready var oCurrentFormat = Nodelist.list["oCurrentFormat"]
+onready var oBuffers = Nodelist.list["oBuffers"]
+onready var oCurrentMap = Nodelist.list["oCurrentMap"]
+onready var oOpenMap = Nodelist.list["oOpenMap"]
+onready var oMessage = Nodelist.list["oMessage"]
+onready var oLoadingBar = Nodelist.list["oLoadingBar"]
+onready var oNewMapWindow = Nodelist.list["oNewMapWindow"]
+onready var oEditor = Nodelist.list["oEditor"]
+onready var oMenu = Nodelist.list["oMenu"]
+onready var oMapSettingsWindow = Nodelist.list["oMapSettingsWindow"]
+onready var oUiSystem = Nodelist.list["oUiSystem"]
+onready var oSlabPlacement = Nodelist.list["oSlabPlacement"]
+
+
+var undo_history = []
+var max_undo_states = 256
+var performing_undo = false
+
+var undo_save_queued = false
+
+func _input(event):
+	if event.is_action_pressed("undo"):
+		var focus = oUiSystem.get_focus_owner()
+		if focus is TextEdit or focus is LineEdit: return # If typing some text into somewhere
+		perform_undo()
+
+
+func clear_history():
+	#oMessage.quick("Undo history cleared")
+	undo_history.clear()
+	oMenu.update_undo_availability()
+	
+	call_deferred("attempt_to_save_new_undo_state")
+
+
+func attempt_to_save_new_undo_state(): # called by oEditor
+	undo_save_queued = true
+
+
+func _process(delta):
+	if undo_save_queued == true:
+		set_process(false)
+		while true:
+			if Input.is_mouse_button_pressed(BUTTON_LEFT) or \
+				oLoadingBar.visible == true or \
+				oNewMapWindow.currently_creating_new_map == true or \
+				performing_undo == true:
+					yield(get_tree(), "idle_frame")
+			else:
+				break
+		print("Start save undo state")
+		var CODETIME_START = OS.get_ticks_msec()
+		var new_state = {}
+		for EXT in oBuffers.FILE_TYPES:
+			if oBuffers.should_process_file_type(EXT) == false:
+				continue
+			if EXT == "TXT" or EXT == "LUA":
+				continue
+			new_state[EXT] = oBuffers.get_buffer_for_extension(EXT, oCurrentMap.path)
+		if new_state.has("TNGFX") and new_state["TNGFX"] == null:
+			oMessage.big("Undo state error", "TNGFX buffer broke")
+		else:
+			on_undo_state_saved(new_state)
+		print("End save undo state: " + str(OS.get_ticks_msec() - CODETIME_START) + "ms")
+		
+		undo_save_queued = false
+		set_process(true)
+
+
+func on_undo_state_saved(new_state):
+	if undo_history.size() >= 1 and are_states_equal(new_state, undo_history[0]):
+		#oMessage.quick("Didn't add undo state as it is the same as the previous undo-state")
+		return
+	if undo_history.size() >= max_undo_states:
+		undo_history.pop_back()
+	undo_history.push_front(new_state)
+	oMenu.update_undo_availability()
+	
+	#oMessage.quick("Undo history size: " + str(undo_history.size()) + " (test)")
+
+
+func perform_undo():
+	print("perform_undo")
+	if performing_undo == true or undo_history.size() <= 1 or oSlabPlacement.block_while_generating():
+		return
+	var previous_state = undo_history[1]
+	if typeof(previous_state) != TYPE_DICTIONARY:
+		print("Error: previous_state is not a dictionary")
+		oMessage.big("Undo state error", "previous_state is not a dictionary")
+		return
+	
+	var CODETIME_START = OS.get_ticks_msec()
+	performing_undo = true
+	
+	oCurrentMap.clear_map()
+	
+	var undoReadCount = 0
+	var undoReadTime = 0
+	for EXT in previous_state:
+		var buffer = previous_state[EXT]
+		if buffer == null or !(buffer is StreamPeerBuffer):
+			print("Undo state error: buffer '%s' is not a valid StreamPeerBuffer" % EXT)
+			oMessage.big("Undo state error", "Buffer '%s' is not a valid StreamPeerBuffer" % EXT)
+			continue
+		var undotimeExt = OS.get_ticks_msec()
+		oBuffers.read_buffer_for_extension(buffer, EXT)
+		var elapsedTime = OS.get_ticks_msec() - undotimeExt
+		undoReadCount += 1
+		undoReadTime += elapsedTime
+	if undoReadCount > 0:
+		print('Undo buffers read: ' + str(undoReadCount) + ' files in ' + str(undoReadTime) + 'ms')
+
+	oOpenMap.continue_load(oCurrentMap.path)
+	undo_history.pop_front()
+	oMenu.update_undo_availability()
+	#oMessage.quick("Undo performed")
+
+	if oEditor.mapHasBeenEdited == false:
+		oEditor.mapHasBeenEdited = oEditor.SET_EDITED_WITHOUT_SAVING_STATE
+	elif undo_history.size() <= 1:
+		oEditor.mapHasBeenEdited = false
+	
+	print('perform_undo: ' + str(OS.get_ticks_msec() - CODETIME_START) + 'ms')
+	
+	performing_undo = false
+
+
+
+func are_states_equal(state1, state2): # (0ms or 1ms)
+	for EXT in state1.keys():
+		var buffer1 = state1[EXT]
+		var buffer2 = state2.get(EXT)
+		if buffer1 is StreamPeerBuffer and buffer2 is StreamPeerBuffer:
+			if buffer1.data_array != buffer2.data_array:
+				return false
+		
+		if buffer1 == null and buffer2 != null:
+			return false
+		if buffer1 != null and buffer2 == null:
+			return false
+	return true

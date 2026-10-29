@@ -1,0 +1,176 @@
+extends FileDialog
+onready var oGame = Nodelist.list["oGame"]
+onready var oUi = Nodelist.list["oUi"]
+onready var oMessage = Nodelist.list["oMessage"]
+onready var oCurrentMap = Nodelist.list["oCurrentMap"]
+onready var oSaveMap = Nodelist.list["oSaveMap"]
+
+var saveInstruction = Label.new()
+var lineEdit
+var lineEditPreviousText = "sadfdfgfdhgfds" # this should be something that won't be initially written in linedit
+var acceptButton
+
+func _ready():
+	# Get rid of filetypes dropdown
+	var fileTypeOptionButton = get_vbox().get_child(3).get_child(2)
+	fileTypeOptionButton.visible = false
+	
+	# Remove 'File:'
+	get_line_edit().get_parent().get_child(0).text = ""
+	
+	lineEdit = get_line_edit()
+	get_vbox().add_child(saveInstruction)
+	get_vbox().move_child(saveInstruction,3)
+	lineEdit.connect('focus_exited',self, 'line_edit_focus_exited')
+	
+	acceptButton = get_ok()
+
+func line_edit_focus_exited():
+	if int(lineEdit.text) == 0:
+		lineEdit.text = "1"
+	while lineEdit.text.length() < 8:
+		lineEdit.text = lineEdit.text.insert(3,"0")
+	lineEdit.caret_position = lineEdit.text.length() #Needed for linux when canceling and reopening save as dialog
+
+func _on_FileDialogSaveAs_about_to_show():
+	
+	var path
+	if oCurrentMap.path == "" or oCurrentMap.loaded_from_backup == true:
+		var personalFolder = oGame.DK_LEVELS_DIRECTORY.plus_file("personal")
+		if Directory.new().dir_exists(personalFolder) and oGame.keeperfx_is_installed() == true:
+			path = personalFolder # KeeperFX has personal folder
+		else:
+			path = oGame.DK_LEVELS_DIRECTORY # Old DK does not have personal folder
+	else:
+		path = oCurrentMap.path
+	
+	
+	current_path = path
+	current_dir = path
+	
+	if oCurrentMap.path == "":
+		# New number
+		#var newMapNum = Random.randi_range(1,32767)
+		#lineEdit.text = str(newMapNum)
+		working_directory_was_changed()
+	else:
+		# Use existing number
+		var currentMapNumber = oCurrentMap.path.get_file().to_upper().trim_prefix("MAP")
+		lineEdit.text = str(currentMapNumber)
+	
+	yield(get_tree(),'idle_frame')
+	lineEdit.caret_position = lineEdit.text.length()
+	lineEdit.grab_focus()
+	deselect_items()
+
+var previousCurrentDir = ""
+
+func _process(delta):
+	if visible == false: return
+	
+	# This is better than a signal because it covers more cases, such as when clicking on a file in the dialog
+	if lineEditPreviousText != lineEdit.text:
+		linedit_was_changed()
+		lineEditPreviousText = lineEdit.text
+	
+	if previousCurrentDir != current_dir:
+		previousCurrentDir = current_dir
+		working_directory_was_changed()
+	
+	saveInstruction.set("custom_colors/font_color", Color(1,0.5,0.5,1))
+	
+	var dir = current_dir.to_upper()
+	if oGame.keeperfx_is_installed() == true:
+		saveInstruction.text = "Map not playable from this directory. (KeeperFX)"
+		if oGame.is_map_root(dir) == true:
+			saveInstruction.text = "Must save in a sub directory. (KeeperFX)"
+		if oGame.is_playable_dir(dir) == true:
+			saveInstruction.text = "Map playable from this directory. (KeeperFX)"
+			saveInstruction.set("custom_colors/font_color", Color(0.5,1.0,0.5,1))
+	else:
+		saveInstruction.text = "Map not playable from this directory. (Original DK)"
+		# Original DK
+		if dir.ends_with("/LEVELS"):
+			saveInstruction.text = "Map playable from this directory. (Original DK)"
+			saveInstruction.set("custom_colors/font_color", Color(0.5,1.0,0.5,1))
+
+func working_directory_was_changed():
+	if oCurrentMap.path == "":
+		var newMapNumber = determine_next_available_map_number_in_dir(current_dir)
+		yield(get_tree(),'idle_frame')
+		lineEdit.text = 'map' + str(newMapNumber)
+		line_edit_focus_exited()
+		
+
+func linedit_was_changed():
+	var rememberCaretPos = lineEdit.caret_position
+	lineEdit.text = lineEdit.text.trim_prefix("map")
+	
+	# remove the letters "m-a-p" when checking whether the string has letters. removing the prefix isn't good enough here.
+	if Utils.string_has_letters(lineEdit.text.to_lower().replace("m","").replace("a","").replace("p","").trim_suffix(".slb")) == true:
+		oMessage.quick("Use only digits in map name")
+	
+	var numberString = Utils.strip_letters_from_string(lineEdit.text)
+	
+	lineEdit.text = numberString
+	
+	while lineEdit.text.length() > 5:
+		var eraseTxt = lineEdit.text
+		eraseTxt.erase(0, 1)
+		lineEdit.text = eraseTxt
+	if lineEdit.text == "00000":
+		lineEdit.text = "00001"
+	if int(lineEdit.text) > 32767:
+		lineEdit.text = "32767"
+		oMessage.quick("Map number cannot be larger than 32767")
+	
+	lineEdit.text = "map"+lineEdit.text
+	lineEdit.caret_position = rememberCaretPos+3
+
+func _on_FileDialogSaveAs_visibility_changed():
+	if is_instance_valid(oUi) == false: return
+	if visible == true:
+		oUi.hide_tools()
+	else:
+		oUi.show_tools()
+
+func determine_next_available_map_number_in_dir(path):
+	if OS.get_name() == "Windows":
+		var driveOptionButton = get_vbox().get_child(0).get_child(2).get_child(0)
+		path = driveOptionButton.get_item_text(driveOptionButton.selected).plus_file(path)
+	
+	var mapFileNumbers = []
+	var dir = Directory.new()
+	if dir.open(path) == OK:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			var map_name = file_name.get_basename().to_upper()
+			if not dir.current_is_dir() and file_name.get_extension().to_upper() == "SLB" and map_name.begins_with("MAP"):
+				var number = map_name.trim_prefix("MAP")
+				if number.length() == 5 and number.is_valid_integer():
+					mapFileNumbers.append(number.to_int())
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	else:
+		print("An error occurred when trying to access the path.")
+	
+	if mapFileNumbers.empty() == true:
+		return 1
+	else:
+		mapFileNumbers.sort()
+		for i in mapFileNumbers:
+			if i < 0:
+				continue
+			if mapFileNumbers.has(i+1) == false:
+				return i+1
+		return 1
+
+func _on_FileDialogSaveAs_file_selected(filePath):
+	oSaveMap.save_map(filePath.get_basename())
+
+func _input(event):
+	if visible and event.is_action_pressed("ui_accept"):
+		get_tree().set_input_as_handled() # Consume the input event to stop the default behavior
+		lineEdit.release_focus()
+		acceptButton.emit_signal("pressed")
