@@ -343,6 +343,21 @@ func _on_TilesetSaveDialog_file_selected(path: String):
 	oMessage.quick("Exported " + path.get_file())
 
 
+func snapshot_tilesets(mapFilename: String, mapDirectory: String) -> bool:
+	for scope in [oConfigFileManager.LOAD_CFG_CAMPAIGN, oConfigFileManager.LOAD_CFG_CURRENT_MAP]:
+		for path in oConfigFileManager.paths_loaded.get(scope, []):
+			var details = oTMapLoader.parse_tmap_path_details(path)
+			if details == null or tilesetPathsToDelete.has(path):
+				continue
+			var target = mapDirectory.plus_file(mapFilename + "." + details.type + str(details.number).pad_zeros(3) + ".dat")
+			if Directory.new().copy(path, target) != OK:
+				return false
+	for type in TYPES:
+		if modified[type] and not save_dat(mapDirectory.plus_file(mapFilename + "." + type + str(tilesetNumber).pad_zeros(3) + ".dat"), type):
+			return false
+	return true
+
+
 func save_modified_tilesets(mapFilename: String, mapDirectory: String) -> bool:
 	var currentMapPaths = oConfigFileManager.paths_loaded[oConfigFileManager.LOAD_CFG_CURRENT_MAP]
 	var directory = Directory.new()

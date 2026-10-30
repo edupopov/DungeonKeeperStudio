@@ -15,6 +15,7 @@ const COMMANDS = { # [argument count, identity argument count, group of lines it
 	"MAGIC_AVAILABLE": [4, 2, 6],
 	"TRAP_AVAILABLE": [4, 2, 7],
 	"DOOR_AVAILABLE": [4, 2, 8],
+	"SET_NEXT_LEVEL": [1, 0, 9],
 }
 
 var order = {} # Ranks identity arguments, such as players and items, so new calls are inserted in order. Unranked ones go last.
@@ -32,7 +33,7 @@ func _init():
 # Only calls with the right argument count are kept, with uppercase arguments.
 # error_line is the first unmatched IF/ENDIF line, or 0 when the script is valid.
 func parse(source):
-	var parsed = {"lines": [], "calls": [], "error_line": 0, "version": 0}
+	var parsed = {"lines": [], "calls": [], "all_calls": [], "error_line": 0, "version": 0}
 	var open_ifs = []
 	var in_comment = false
 	var start = 0
@@ -50,7 +51,7 @@ func parse(source):
 			line.depth = open_ifs.size()
 		var found = call_regex.search(line.text)
 		var command = found.get_string(1).to_upper() if found != null else ""
-		if COMMANDS.has(command) and found.get_string(2).count(",") == COMMANDS[command][0] - 1:
+		if found != null:
 			var call = {"command": command, "args": [], "spans": [], "line": line}
 			var offset = line.start + found.get_start(2)
 			for raw in found.get_string(2).split(","):
@@ -58,9 +59,11 @@ func parse(source):
 				call.args.append(raw.strip_edges().to_upper())
 				call.spans.append([offset + leading, offset + leading + call.args.back().length()])
 				offset += raw.length() + 1
-			parsed.calls.append(call)
-			if command == "LEVEL_VERSION": # KeeperFX preloads LEVEL_VERSION, even inside IF blocks
-				parsed.version = int(call.args[0])
+			parsed.all_calls.append(call)
+			if COMMANDS.has(command) and found.get_string(2).count(",") == COMMANDS[command][0] - 1:
+				parsed.calls.append(call)
+				if command == "LEVEL_VERSION": # KeeperFX preloads LEVEL_VERSION, even inside IF blocks
+					parsed.version = int(call.args[0])
 		if if_regex.search(line.text) != null:
 			open_ifs.append(line.number)
 	if parsed.error_line == 0 and open_ifs.empty() == false:

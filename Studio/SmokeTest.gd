@@ -16,7 +16,7 @@ func check(condition: bool, message: String):
 
 
 func _run():
-	get_tree().create_timer(90).connect("timeout", self, "_timeout")
+	get_tree().create_timer(180).connect("timeout", self, "_timeout")
 	var main = get_parent()
 	yield(get_tree().create_timer(3), "timeout")
 	var studio = main.get_node_or_null("Studio")
@@ -287,6 +287,14 @@ func _run():
 		check(refs.oCurrentMap.path == saved_path, "Exportar nao troca o caminho da copia de trabalho")
 		check(studio.sync_targets.get(studio._sync_key(saved_path), "") == linked_target, "Exportar preserva vinculo com a fase da campanha")
 		check(studio.save_working_map() and studio.installed_path == linked_target, "Salvar apos exportar volta a atualizar a fase vinculada")
+		studio.sync_enabled = false
+		var expansion = load("res://Studio/ExpansionTest.gd").new()
+		add_child(expansion)
+		expansion.smoke = self
+		var expanded = expansion.run(studio, test_root)
+		if expanded is GDScriptFunctionState:
+			yield(expanded, "completed")
+		expansion.queue_free()
 		studio.sync_enabled = false
 		studio.fx_exe = previous_sync[2]
 		studio.workspace = original_workspace

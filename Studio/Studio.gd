@@ -73,6 +73,11 @@ var inspect_label: Label
 var palette_entries = []
 var preview_key = ""
 var studio_tabs: TabContainer
+var construction
+var recovery
+var spatial_checks
+var missions
+var library
 
 
 func _ready():
@@ -83,6 +88,21 @@ func _ready():
 	map_tools = load("res://Studio/MapTools.gd").new()
 	map_tools.studio = self
 	add_child(map_tools)
+	recovery = load("res://Studio/Recovery.gd").new()
+	recovery.studio = self
+	add_child(recovery)
+	construction = load("res://Studio/Construction.gd").new()
+	construction.studio = self
+	refs.oGame2D.add_child(construction)
+	spatial_checks = load("res://Studio/SpatialChecks.gd").new()
+	spatial_checks.studio = self
+	refs.oGame2D.add_child(spatial_checks)
+	missions = load("res://Studio/MissionWizard.gd").new()
+	missions.studio = self
+	add_child(missions)
+	library = load("res://Studio/MapLibrary.gd").new()
+	library.studio = self
+	add_child(library)
 	_translate_interface()
 	get_tree().connect("files_dropped", self, "_files_dropped")
 	call_deferred("_start")
@@ -165,6 +185,8 @@ func _build_ui():
 	studio_tabs.rect_min_size.y = 250
 	root_box.add_child(studio_tabs)
 	box = _studio_tab("Mapa")
+	_row(box, [["Biblioteca / campanhas", "_library"], ["Historico", "_history"]])
+	_row(box, [["Criar versao de recuperacao", "_snapshot"]])
 	_row(box, [["Exportar ao jogo", "_confirm_export"], ["Verificar", "_verify"]])
 	_row(box, [["Importar original", "_import_original"], ["Salvar nova copia", "_save_copy"]])
 	_row(box, [["Retomar ultimo salvo", "_resume_saved"]])
@@ -178,8 +200,12 @@ func _build_ui():
 	working_label.hint_tooltip = "O painel mostra a copia editavel e o destino sincronizado. Feche e reinicie a fase para carregar mudancas."
 	_row(box, [["Regras avancadas", "_rules"]])
 	_row(box, [["Poderes por jogador", "_powers"], ["Objetivos e eventos", "_events"]])
+	_row(box, [["Assistente de missao encadeada", "_mission"]])
 	_row(box, [["Configurar jogos", "_configure"], ["Pasta de mapas", "_open_folder"]])
 	box = _studio_tab("Construir")
+	_row(box, [["Bases / salas prontas", "_templates"]])
+	_row(box, [["Copiar area", "_copy_area"], ["Colar / transformar", "_paste_area"]])
+	_row(box, [["Cancelar ferramenta", "_cancel_construction"]])
 	owner_picker = OptionButton.new()
 	box.add_child(_heading("Dono dos terrenos e criaturas"))
 	box.add_child(owner_picker)
@@ -615,6 +641,8 @@ func _terrain_icon(id: int) -> ImageTexture:
 
 
 func _palette_selected(index):
+	if construction != null:
+		construction.cancel()
 	var id = palette.get_item_metadata(index)
 	var source_category = palette_entries[index]
 	selected_entry = "%s:%s" % [source_category, id]
@@ -678,6 +706,8 @@ func _area_radius_changed(value):
 
 
 func _inspect_toggled(enabled):
+	if enabled and construction != null:
+		construction.cancel()
 	inspecting = enabled
 	refs.oSelector.holdClickOnInstance = null
 	refs.oSelector.draggingInstance = false
@@ -697,7 +727,7 @@ func _update_preview():
 	if key != preview_key and selection.paintThingType != null and selection.paintSubtype != null:
 		preview_key = key
 		preview.texture = Things.fetch_sprite(selection.paintThingType, selection.paintSubtype)
-	preview.visible = panel.visible and not inspecting and refs.oSelector.visible and refs.oSelector.mode == refs.oSelector.MODE_SUBTILE and preview.texture != null and not refs.oLoadingBar.visible
+	preview.visible = panel.visible and not inspecting and (construction == null or construction.mode.empty()) and refs.oSelector.visible and refs.oSelector.mode == refs.oSelector.MODE_SUBTILE and preview.texture != null and not refs.oLoadingBar.visible
 	preview.global_position = (refs.oSelector.cursorSubtile + Vector2(0.5, 0.5)) * Constants.SUBTILE_SIZE
 
 
@@ -738,6 +768,8 @@ func _level_changed(value):
 
 
 func _advanced_changed(enabled):
+	if construction != null:
+		construction.cancel()
 	if enabled:
 		refs.oUi.show_tools()
 		panel.hide()
@@ -1014,10 +1046,41 @@ func _has_map() -> bool:
 func _verify():
 	if not _has_map():
 		return
-	var issues = checker.inspect(snapshot())
-	report_text.text = "Verificacao estatica; nao substitui jogar a missao.\n\n"
-	report_text.text += "\n\n".join(issues) if not issues.empty() else "Nenhum problema detectado nas verificacoes basicas."
-	Utils.popup_centered(report)
+	spatial_checks.open_report()
+
+
+func _library():
+	library.open_library()
+
+
+func _history():
+	recovery.open_history()
+
+
+func _snapshot():
+	if _has_map():
+		recovery.capture("manual")
+
+
+func _mission():
+	missions.open_wizard()
+
+
+func _templates():
+	construction.open_templates()
+
+
+func _copy_area():
+	construction.begin_copy()
+
+
+func _paste_area():
+	construction.open_transform()
+
+
+func _cancel_construction():
+	construction.cancel()
+	status.text = "Ferramenta de construcao cancelada."
 
 
 func _next_path(folder: String, first: int, last: int) -> String:
@@ -1047,6 +1110,9 @@ func allow_save(path: String) -> bool:
 	var root = workspace.replace("\\", "/").trim_suffix("/").to_lower() + "/"
 	if not normalized.begins_with(root):
 		refs.oMessage.big("Mapa original protegido", "Salve primeiro uma copia com o botao Salvar mapa.\nPara adicionar ao jogo, use Exportar ao jogo; ele escolhe um numero livre.")
+		return false
+	if normalized.begins_with(root + "historico/"):
+		refs.oMessage.big("Versao protegida", "O Historico nao pode ser sobrescrito. Use Mapa > Historico > Recuperar copia para continuar a edicao em Mapas.")
 		return false
 	if refs.oCurrentFormat.selected == Constants.OldFormat:
 		var issues = checker.inspect(snapshot())
@@ -1127,6 +1193,9 @@ func record_working_save(path: String) -> bool:
 	if not _save_profiles():
 		return false
 	refs.oMenu.add_recent(path)
+	if recovery != null:
+		recovery.saved(false)
+		recovery.capture("salvo")
 	if sync_enabled and not suppress_sync:
 		return _sync_working_map(normalized)
 	status.text = "Edicoes salvas em:\n" + path + "\nPara jogar esta versao: Exportar ao jogo, depois Testar. A campanha original nao foi alterada."
@@ -1225,6 +1294,8 @@ func _sync_working_map(source: String) -> bool:
 	if not _save_profiles():
 		return false
 	status.text = "SALVO NA COPIA E NO KEEPERFX\n" + source + "\nJogo: " + target + "\nBackup: " + str(result.backup) + "\nReinicie a fase; partidas salvas mantem o cenario anterior."
+	if recovery != null:
+		recovery.saved(true)
 	return true
 
 

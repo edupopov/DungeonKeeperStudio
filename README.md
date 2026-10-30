@@ -79,6 +79,83 @@ configuracao do KeeperFX nao sao oferecidos no perfil Gold.
 Depois de aplicar, use **Salvar mapa** e reinicie a fase para carregar
 as alteracoes. Os formularios nao mudam partidas ja salvas.
 
+## Construcao, recuperacao e missoes
+
+As seis ferramentas abaixo ficam no painel simples, sem precisar abrir os
+controles avancados:
+
+| Ferramenta | Onde usar | Comportamento |
+| --- | --- | --- |
+| Bases e salas prontas | Construir > Bases / salas prontas | Escolha modelo, dono e salas de 3, 5 ou 7 blocos. Clique pelo canto superior esquerdo e confirme a previa. A base inclui coracao, portal, tesouro, dormitorio, galinheiro, treinamento e quatro imps. |
+| Copiar e transformar | Construir > Copiar area | Clique nos dois cantos. Em Colar / transformar, escolha giro de 90/180/270 graus, espelhamento, dono e substituicao. Clique no destino e confirme. |
+| Historico | Mapa > Historico | Versoes por horario e origem, recuperacao automatica a cada dois minutos de trabalho nao salvo e copias antes de carimbos/missoes. Criar versao de recuperacao guarda uma versao manual. |
+| Validacao visual | Mapa > Verificar | Lista problemas e marca suas posicoes. Clique na lista para centralizar o mapa; reveja a analise depois de editar. |
+| Missao encadeada | Mapa > Assistente de missao encadeada | Explorar uma area, enfrentar herois, receber cura ou aliados e destruir o coracao inimigo, com previa do DKScript e um flag livre. |
+| Biblioteca e campanhas | Mapa > Biblioteca / campanhas | Miniaturas do terreno salvo, busca, nome/descricao locais, Abrir, Jogar e sequencia de campanha KeeperFX. |
+
+**Construcao e copia:** o destino e protegido por padrao. A substituicao de
+terreno precisa ser autorizada na janela de colagem e sempre exige confirmacao
+no mapa. Coracoes, areas de evento e portais de herois existentes nunca sao
+apagados pela colagem. Uma base inteira pode ser copiada para um jogador sem
+coracao; coracoes e portais devem estar inteiramente na selecao. Criaturas
+mantem nivel, nome, ouro, saude e orientacao; as copias recebem novos indices.
+Itens, portas e luzes manuais acompanham a area, e a decoracao e regenerada
+pelo terreno. Pontos de evento, portais de herois e caixas especiais
+personalizadas nao sao copiados, para nao duplicar numeros usados no script.
+Geometria personalizada exige as ferramentas
+avancadas: o carimbo trabalha com tipos de terreno padrao, nao com edicoes
+individuais de colunas. **Esc** ou **Cancelar ferramenta** cancela a operacao.
+Um Ctrl+Z desfaz o carimbo inteiro, incluindo as regras iniciais adicionadas
+para o novo dono, sem deixar uma base pela metade.
+
+**Recuperacao:** os conjuntos em `Historico` incluem terreno, elementos,
+scripts e configuracoes/texturas locais, com manifesto e verificacao de
+conteudo. Nao chamam o salvamento normal, nao limpam a marca de trabalho
+pendente e nunca sincronizam com o jogo. Recuperar cria outra pasta em `Mapas`,
+sem herdar um destino de substituicao. A versao atual nao salva tambem recebe
+uma copia antes da recuperacao. O Studio conserva as ultimas 30 versoes
+automaticas/salvas por mapa; versoes manuais nao expiram. Versoes alteradas
+externamente nao sao apagadas pela limpeza automatica. A janela mostra os
+horarios do ultimo salvamento local e do ultimo envio ao KeeperFX.
+
+**Validacao:** inclui criaturas em terreno solido, portais pequenos ou sem
+saida, bases sem caminho pronto ate um portal, numeros de area duplicados,
+referencias a areas removidas e objetivos de destruir jogadores sem coracao.
+Conectividade considera o terreno atual, sem escavacao, voo ou travessia de
+agua/lava: isolamento e um aviso para revisao, nao uma prova de missao impossivel.
+Scripts podem criar novas estruturas durante a partida; a analise nao executa
+nem demonstra que todo objetivo manual e alcancavel.
+
+**Missoes:** uma cadeia gerenciada por mapa, para o humano Vermelho. A segunda
+etapa espera `PLAYER_GOOD` ficar sem criaturas; por isso, o assistente recusa
+outros herois no terreno ou surgimentos de herois em outros eventos. Reaplicar
+atualiza o bloco, sem duplicar regras. O assistente preserva flags e regras
+manuais, recusa Lua e nao remove uma vitoria manual desconhecida.
+
+**Biblioteca:** indexa ate 1.000 mapas locais, em ate cinco niveis de subpastas.
+Nome e descricao organizam somente o catalogo; nao alteram arquivos comerciais
+ou o texto da missao. Miniaturas sao geradas de SLB descomprimido. **Jogar**
+instala uma nova copia da versao salva no disco, sem trocar o mapa aberto,
+o vinculo de sincronizacao ou uma fase original.
+
+**Campanhas:** adicione mapas KeeperFX pela biblioteca e abra Organizar /
+exportar campanha. Subir/Descer muda a ordem; Proxima fase define tambem o
+destino normal da caixa Transferir criatura. A caixa ainda precisa ser colocada
+no mapa e ativada pelo jogador; o editor nao transfere criaturas sozinho.
+Sao aceitas de 1 a 32 fases, sem ciclos ou fases inacessiveis na sequencia.
+A exportacao em `Campanhas` usa novas copias e `SET_NEXT_LEVEL`, sem mudar os
+scripts fonte. A instalacao opcional registra uma NOVA campanha no KeeperFX.
+Inicie-a pela selecao de campanhas do jogo, nao por uma partida salva antiga.
+Usa os recursos de tela/creditos da campanha original ja instalados em
+`campgns\keeporig_lnd`, sem copia-los para o pacote. Mapas Gold precisam ser
+convertidos e salvos como outra copia KeeperFX para compor uma campanha;
+continuam jogaveis individualmente no Gold. Lua e progressao manual por
+`SET_NEXT_LEVEL` exigem as ferramentas avancadas.
+
+`Historico`, `Biblioteca` e `Campanhas` sao privados, ignorados pelo Git e
+excluidos do executavel. Uma campanha contendo mapas importados continua
+sujeita aos direitos desses mapas: a exportacao local nao autoriza publica-los.
+
 ## Salvamento sincronizado com o KeeperFX
 
 Nesta instalacao, **Salvar mapa/Ctrl+S** tambem pode atualizar o mapa no

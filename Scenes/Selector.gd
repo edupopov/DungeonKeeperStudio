@@ -108,6 +108,8 @@ func mouse_button_on_field():
 	if oLoadingBar.visible == true: return
 	if preventClickWhenFocusing == true: return
 	var studio = get_tree().current_scene.get_node_or_null("Studio")
+	if studio != null and studio.construction != null and not studio.advanced.pressed and studio.construction.field_input():
+		return
 	if studio != null and studio.inspecting and not studio.advanced.pressed:
 		if visible and Input.is_action_just_pressed("mouse_left"):
 			oInspector.inspect_something(instance_position(get_global_mouse_position(), "Instance"))

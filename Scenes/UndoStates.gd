@@ -39,6 +39,23 @@ func attempt_to_save_new_undo_state(): # called by oEditor
 	undo_save_queued = true
 
 
+func studio_is_constructing() -> bool:
+	var studio = get_tree().current_scene.get_node_or_null("Studio")
+	return studio != null and studio.construction != null and studio.construction.placing
+
+
+func save_current_state():
+	var new_state = {}
+	for EXT in oBuffers.FILE_TYPES:
+		if not oBuffers.should_process_file_type(EXT):
+			continue
+		new_state[EXT] = oBuffers.get_buffer_for_extension(EXT, oCurrentMap.path)
+	if new_state.has("TNGFX") and new_state["TNGFX"] == null:
+		oMessage.big("Undo state error", "TNGFX buffer broke")
+		return
+	on_undo_state_saved(new_state)
+
+
 func _process(delta):
 	if undo_save_queued == true:
 		set_process(false)
@@ -46,23 +63,14 @@ func _process(delta):
 			if Input.is_mouse_button_pressed(BUTTON_LEFT) or \
 				oLoadingBar.visible == true or \
 				oNewMapWindow.currently_creating_new_map == true or \
+				studio_is_constructing() or \
 				performing_undo == true:
 					yield(get_tree(), "idle_frame")
 			else:
 				break
 		print("Start save undo state")
 		var CODETIME_START = OS.get_ticks_msec()
-		var new_state = {}
-		for EXT in oBuffers.FILE_TYPES:
-			if oBuffers.should_process_file_type(EXT) == false:
-				continue
-			if EXT == "TXT" or EXT == "LUA":
-				continue
-			new_state[EXT] = oBuffers.get_buffer_for_extension(EXT, oCurrentMap.path)
-		if new_state.has("TNGFX") and new_state["TNGFX"] == null:
-			oMessage.big("Undo state error", "TNGFX buffer broke")
-		else:
-			on_undo_state_saved(new_state)
+		save_current_state()
 		print("End save undo state: " + str(OS.get_ticks_msec() - CODETIME_START) + "ms")
 		
 		undo_save_queued = false
@@ -83,7 +91,7 @@ func on_undo_state_saved(new_state):
 
 func perform_undo():
 	print("perform_undo")
-	if performing_undo == true or undo_history.size() <= 1 or oSlabPlacement.block_while_generating():
+	if performing_undo == true or studio_is_constructing() or undo_history.size() <= 1 or oSlabPlacement.block_while_generating():
 		return
 	var previous_state = undo_history[1]
 	if typeof(previous_state) != TYPE_DICTIONARY:
@@ -95,6 +103,8 @@ func perform_undo():
 	performing_undo = true
 	
 	oCurrentMap.clear_map()
+	oCurrentMap.DKScript_enabled = previous_state.has("TXT")
+	oCurrentMap.LuaScript_enabled = previous_state.has("LUA")
 	
 	var undoReadCount = 0
 	var undoReadTime = 0
@@ -129,6 +139,8 @@ func perform_undo():
 
 
 func are_states_equal(state1, state2): # (0ms or 1ms)
+	if state1.size() != state2.size():
+		return false
 	for EXT in state1.keys():
 		var buffer1 = state1[EXT]
 		var buffer2 = state2.get(EXT)

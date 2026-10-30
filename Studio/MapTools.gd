@@ -85,6 +85,7 @@ func _script_error() -> String:
 
 
 func _error(text: String):
+	print("Studio: " + text)
 	refs.oMessage.big("Ferramentas do mapa", text)
 
 

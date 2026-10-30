@@ -91,9 +91,13 @@ func _input(event):
 
 func launch_game(mainCommands, launchMessage = "Launching..."):
 	var printOutput = []
-	OS.execute(COMMAND_LINE_CONSOLE, [COMMAND_LINE_CONSOLE_ARG, mainCommands], false, printOutput) # Make sure "false" is set so Unearth doesn't freeze
+	var process_id = OS.execute(COMMAND_LINE_CONSOLE, [COMMAND_LINE_CONSOLE_ARG, mainCommands], false, printOutput) # Make sure "false" is set so Unearth doesn't freeze
+	if process_id < 0:
+		oMessage.big("Jogo nao iniciado", "Nao foi possivel iniciar o executavel. Confira o caminho e as permissoes.")
+		return false
 	print(printOutput)
 	oMessage.quick(launchMessage)
+	return true
 
 
 func set_paths(path):
@@ -159,26 +163,28 @@ func reconstruct_command_line():
 	var scroll = oCmdLineExecute.get_parent().get_parent()
 	scroll.scroll_horizontal = scroll.get_h_scrollbar().max_value
 
-func cmdline(mapPath, packetLoad):
+func cmdline(mapPath, packetLoad, executable_override = ""):
 	# Keep in mind Linux and Windows both want different quotation marks ' "
 	var constructString = ""
+	var executable_path = EXECUTABLE_PATH if executable_override == "" else executable_override
+	var game_directory = executable_path.get_base_dir()
 	match OS.get_name():
 		"Windows":
 			constructString += 'cd /D '
-			constructString += '"' + GAME_DIRECTORY + '"'
+			constructString += '"' + game_directory + '"'
 			constructString += ' && '
-			constructString += '"' + EXECUTABLE_PATH.get_file() + '"'
+			constructString += '"' + executable_path.get_file() + '"'
 		"X11":
 			constructString += "cd "
-			constructString += "'" + GAME_DIRECTORY + "'"
+			constructString += "'" + game_directory + "'"
 			constructString += " && "
 			# Native Linux KeeperFX runs directly (no Wine). Only fall back to Wine
 			# for an actual Windows .exe (e.g. running the Windows build under Wine).
-			if EXECUTABLE_PATH.get_extension().to_lower() == "exe":
+			if executable_path.get_extension().to_lower() == "exe":
 				constructString += "wine "
-				constructString += "'" + EXECUTABLE_PATH.get_file() + "'"
+				constructString += "'" + executable_path.get_file() + "'"
 			else:
-				constructString += "'./" + EXECUTABLE_PATH.get_file() + "'"
+				constructString += "'./" + executable_path.get_file() + "'"
 	
 	# Delete -level xxx and -campaign xxx from the command line
 	var arrayOfWords = constructString.split(" ")
