@@ -1,6 +1,7 @@
 extends Node
 
 const Checks = preload("res://Studio/MapChecks.gd")
+const Catalog = preload("res://Studio/ContentCatalog.gd")
 const OWNER_NAMES = ["Vermelho (voce)", "Azul", "Verde", "Amarelo", "Herois", "Neutro", "Roxo", "Preto", "Laranja"]
 const TERRAIN = [
 	["Terra", 2], ["Rocha", 0], ["Ouro", 1], ["Gemas", 52],
@@ -57,6 +58,21 @@ var target_dialog: FileDialog
 var target_confirm: ConfirmationDialog
 var pending_sync_source = ""
 var pending_sync_target = ""
+var catalog = Catalog.new()
+var map_tools
+var palette_filter: OptionButton
+var favorite_button: Button
+var favorites = []
+var recent_items = []
+var selected_entry = ""
+var selected_description = ""
+var preview: Sprite
+var inspect_toggle: CheckButton
+var inspecting = false
+var inspect_label: Label
+var palette_entries = []
+var preview_key = ""
+var studio_tabs: TabContainer
 
 
 func _ready():
@@ -64,6 +80,9 @@ func _ready():
 	workspace = Settings.unearth_path
 	_setup_paths()
 	_build_ui()
+	map_tools = load("res://Studio/MapTools.gd").new()
+	map_tools.studio = self
+	add_child(map_tools)
 	_translate_interface()
 	get_tree().connect("files_dropped", self, "_files_dropped")
 	call_deferred("_start")
@@ -78,6 +97,8 @@ func _setup_paths():
 	last_saved_map = Settings.config.get_value("studio", "last_saved_map", "")
 	sync_enabled = Settings.config.get_value("studio", "sync_enabled", false)
 	sync_targets = Settings.config.get_value("studio", "sync_targets", {})
+	favorites = Settings.config.get_value("studio", "favorites", [])
+	recent_items = Settings.config.get_value("studio", "recent_items", [])
 	var detected = refs.oGame.EXECUTABLE_PATH
 	if File.new().file_exists(detected):
 		if detected.get_file().to_lower().begins_with("keeperfx"):
@@ -129,18 +150,22 @@ func _build_ui():
 	refs.oUiTools.add_child(panel)
 	var box = VBoxContainer.new()
 	box.add_constant_override("separation", 7)
-	var scroll = ScrollContainer.new()
-	scroll.scroll_horizontal_enabled = false
-	panel.add_child(scroll)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(box)
+	panel.add_child(box)
 	var title = Label.new()
 	title.text = "DUNGEON KEEPER STUDIO"
 	title.add_color_override("font_color", Color("#e8bf77"))
 	box.add_child(title)
 	profile_label = _label(box, "Crie ou abra um mapa para comecar.")
 	_row(box, [["Novo mapa", "_show_wizard"], ["Abrir meus mapas", "_browse"]])
-	_row(box, [["Salvar mapa", "save_working_map"], ["Exportar ao jogo", "_confirm_export"]])
+	_row(box, [["Salvar mapa", "save_working_map"], ["Testar", "_test"]])
+	var root_box = box
+	studio_tabs = TabContainer.new()
+	studio_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	studio_tabs.rect_min_size.y = 250
+	root_box.add_child(studio_tabs)
+	box = _studio_tab("Mapa")
+	_row(box, [["Exportar ao jogo", "_confirm_export"], ["Verificar", "_verify"]])
 	_row(box, [["Importar original", "_import_original"], ["Salvar nova copia", "_save_copy"]])
 	_row(box, [["Retomar ultimo salvo", "_resume_saved"]])
 	sync_toggle = CheckButton.new()
@@ -151,14 +176,16 @@ func _build_ui():
 	_row(box, [["Vincular fase do KeeperFX", "_choose_sync_target"]])
 	working_label = _label(box, "Nenhum mapa aberto.")
 	working_label.hint_tooltip = "O painel mostra a copia editavel e o destino sincronizado. Feche e reinicie a fase para carregar mudancas."
-	_row(box, [["Regras", "_rules"], ["Verificar", "_verify"], ["Testar", "_test"]])
+	_row(box, [["Regras avancadas", "_rules"]])
+	_row(box, [["Poderes por jogador", "_powers"], ["Objetivos e eventos", "_events"]])
 	_row(box, [["Configurar jogos", "_configure"], ["Pasta de mapas", "_open_folder"]])
+	box = _studio_tab("Construir")
 	owner_picker = OptionButton.new()
 	box.add_child(_heading("Dono dos terrenos e criaturas"))
 	box.add_child(owner_picker)
 	owner_picker.connect("item_selected", self, "_owner_selected")
 	category = OptionButton.new()
-	for text in ["Terreno", "Salas e coracao", "Criaturas", "Armadilhas", "Portas"]:
+	for text in ["Terreno", "Salas e coracao", "Criaturas", "Armadilhas", "Portas", "Itens especiais", "Livros de magia", "Areas de evento"]:
 		category.add_item(text)
 	box.add_child(category)
 	category.connect("item_selected", self, "_category_changed")
@@ -166,6 +193,11 @@ func _build_ui():
 	search.placeholder_text = "Buscar pelo nome..."
 	box.add_child(search)
 	search.connect("text_changed", self, "_search_changed")
+	palette_filter = OptionButton.new()
+	for text in ["Todos da categoria", "Favoritos (todas as categorias)", "Recentes (todas as categorias)"]:
+		palette_filter.add_item(text)
+	box.add_child(palette_filter)
+	palette_filter.connect("item_selected", self, "_category_changed")
 	palette = ItemList.new()
 	palette.rect_min_size = Vector2(300, 160)
 	palette.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -178,6 +210,11 @@ func _build_ui():
 	box.add_child(palette)
 	palette.connect("item_selected", self, "_palette_selected")
 	selection_label = _label(box, selected_label)
+	favorite_button = Button.new()
+	favorite_button.text = "Adicionar aos favoritos"
+	favorite_button.disabled = true
+	favorite_button.connect("pressed", self, "_favorite")
+	box.add_child(favorite_button)
 	var tools = OptionButton.new()
 	tool_picker = tools
 	for text in ["Lapis", "Pincel", "Retangulo", "Preencher"]:
@@ -192,16 +229,55 @@ func _build_ui():
 	_label(brush_row, "Nivel")
 	var level = _spin(brush_row, 1, 10, 1)
 	level.connect("value_changed", self, "_level_changed")
+	var area_row = HBoxContainer.new()
+	box.add_child(area_row)
+	_label(area_row, "Raio da area (subblocos)")
+	var radius = _spin(area_row, 1, 30, 3)
+	refs.oPlacingSettings.pointRange = 3
+	radius.connect("value_changed", self, "_area_radius_changed")
+	_label(box, "Clique: colocar | Direito: copiar\nRoda: zoom | Central: mover | Ctrl+Z: desfazer")
+	box = _studio_tab("Inspecionar")
+	inspect_toggle = CheckButton.new()
+	inspect_toggle.text = "Inspecionar (sem pintar)"
+	box.add_child(inspect_toggle)
+	inspect_toggle.connect("toggled", self, "_inspect_toggled")
+	inspect_label = _label(box, "Ative Inspecionar e clique em um elemento.")
+	_row(box, [["Editar selecionado", "_edit_element"], ["Duplicar", "_duplicate_element"], ["Excluir", "_delete_element"]])
+	_label(box, "Clique em criaturas, itens ou areas no mapa.\nEditar abre as propriedades. Duplicar prepara uma copia para colocar em outro local.\nPortas e coracoes sao editados como terreno.")
 	advanced = CheckButton.new()
 	advanced.text = "Ferramentas avancadas do Unearth"
 	box.add_child(advanced)
 	advanced.connect("toggled", self, "_advanced_changed")
-	_label(box, "Clique: pintar / colocar | Direito: copiar\nRoda: zoom | Botao central: mover\nDelete: remover criatura | Ctrl+Z: desfazer")
-	status = _label(box, "Os mapas originais sao protegidos.")
+	status = _label(root_box, "Os mapas originais sao protegidos.")
 	status.add_color_override("font_color", Color("#a8c9a1"))
 	get_viewport().connect("size_changed", self, "_layout")
 	_build_dialogs()
+	preview = Sprite.new()
+	preview.modulate = Color(1, 1, 1, 0.55)
+	preview.z_index = 100
+	refs.oSelector.add_child(preview)
+	studio_tabs.current_tab = 1
+	studio_tabs.connect("tab_changed", self, "_studio_tab_changed")
 	_layout()
+
+
+func _studio_tab(title: String) -> VBoxContainer:
+	var scroll = ScrollContainer.new()
+	scroll.name = title
+	scroll.scroll_horizontal_enabled = false
+	studio_tabs.add_child(scroll)
+	var box = VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_constant_override("separation", 7)
+	scroll.add_child(box)
+	return box
+
+
+func _studio_tab_changed(index: int):
+	var enabled = index == 2
+	inspect_toggle.set_pressed_no_signal(enabled)
+	_inspect_toggled(enabled)
 
 
 func _label(parent: Node, text: String) -> Label:
@@ -372,6 +448,7 @@ func _translate_labels(node: Node, translations: Dictionary):
 
 
 func _process(delta):
+	_update_preview()
 	elapsed += delta
 	if elapsed < 0.15:
 		return
@@ -405,7 +482,9 @@ func _process(delta):
 		working_label.text += "\nApos editar, exporte novamente e use Testar (nao um atalho antigo)."
 	if not sync_enabled:
 		working_label.text += "\nSINCRONIZACAO DESLIGADA: Salvar NAO atualiza o KeeperFX."
-	selection_label.text = selected_label + "\nDono: " + OWNER_NAMES[int(refs.oSelection.paintOwnership)]
+	selection_label.text = selected_label + "\n" + selected_description + "\nDono: " + OWNER_NAMES[int(refs.oSelection.paintOwnership)]
+	if is_instance_valid(map_tools):
+		inspect_label.text = map_tools.selection_summary()
 	palette.mouse_filter = Control.MOUSE_FILTER_STOP
 
 
@@ -434,9 +513,31 @@ func _search_changed(_text):
 
 
 func _refresh_palette():
+	palette.set_block_signals(true)
 	palette.clear()
+	palette_entries.clear()
+	var categories = [category.selected]
+	if palette_filter.selected > 0:
+		categories = range(8)
+	for source_category in categories:
+		_append_palette_category(source_category)
+	if palette_filter.selected == 2:
+		var destination_index = 0
+		for key in recent_items:
+			for index in range(destination_index, palette.get_item_count()):
+				if "%s:%s" % [palette_entries[index], palette.get_item_metadata(index)] == key:
+					palette.move_item(index, destination_index)
+					var source_category = palette_entries[index]
+					palette_entries.remove(index)
+					palette_entries.insert(destination_index, source_category)
+					destination_index += 1
+					break
+	palette.set_block_signals(false)
+
+
+func _append_palette_category(source_category: int):
 	var entries = []
-	match category.selected:
+	match source_category:
 		0: entries = TERRAIN
 		1: entries = ROOMS
 		2:
@@ -452,21 +553,51 @@ func _refresh_palette():
 					continue
 				entries.append([Things.fetch_name(Things.TYPE.TRAP, id), id])
 		4: entries = DOORS
+		_: entries = catalog.entries(source_category, refs.oCurrentFormat.selected == Constants.OldFormat, refs.oScriptGenerator)
 	for entry in entries:
-		if not search.text.empty() and not search.text.to_lower() in entry[0].to_lower():
+		var key = "%s:%s" % [source_category, entry[1]]
+		if palette_filter.selected == 1 and not key in favorites:
+			continue
+		if palette_filter.selected == 2 and not key in recent_items:
+			continue
+		var description = _entry_description(source_category, entry[1])
+		if not search.text.empty() and not catalog.search_key(search.text) in catalog.search_key(entry[0] + " " + description):
 			continue
 		var icon
-		if category.selected in [0, 1, 4]:
-			var icon_id = entry[1] + 1 if category.selected == 4 else entry[1]
+		if source_category in [0, 1, 4]:
+			var icon_id = entry[1] + 1 if source_category == 4 else entry[1]
 			icon = Slabs.icons.get(Slabs.fetch_idname(icon_id), null)
 			if icon == null:
 				icon = _terrain_icon(entry[1])
 		else:
-			var type = Things.TYPE.CREATURE if category.selected == 2 else Things.TYPE.TRAP
+			var type = _category_type(source_category)
 			icon = Things.fetch_icon_sprite(type, entry[1], Vector2(34, 34), 2.0)
-		palette.add_item(entry[0], icon)
+		palette.add_item(_palette_title(entry[0]), icon)
 		palette.set_item_metadata(palette.get_item_count() - 1, entry[1])
-		palette.set_item_tooltip(palette.get_item_count() - 1, entry[0] + "\nSelecione e clique no mapa para colocar.")
+		palette_entries.append(source_category)
+		palette.set_item_tooltip(palette.get_item_count() - 1, entry[0] + "\n" + description + "\nSelecione e clique no mapa para colocar.")
+
+
+func _category_type(value: int) -> int:
+	return {2: Things.TYPE.CREATURE, 3: Things.TYPE.TRAP, 5: Things.TYPE.OBJECT, 6: Things.TYPE.OBJECT, 7: Things.TYPE.EXTRA}.get(value, Things.TYPE.NONE)
+
+
+func _palette_title(text: String) -> String:
+	return {"Ressuscitar criatura": "Ressuscitar", "Transferir criatura": "Transferir",
+		"Multiplicar criaturas": "Multiplicar", "Encontrar mundo secreto": "Mundo secreto",
+		"Transformar em galinha": "Virar galinha", "Convocar audiencia": "Audiencia",
+		"Coracao da dungeon": "Coracao"}.get(text, text)
+
+
+func _entry_description(value: int, id: int) -> String:
+	if value in [5, 6]:
+		var text = catalog.object_description(id)
+		text += "\nLivro coletavel; liberar o poder inicial e uma opcao separada." if value == 6 else ""
+		text += "\nNa biblioteca, o dono segue o terreno; fora dela, fica neutro."
+		return text + ("\nGold / KeeperFX" if Catalog.OBJECTS.has(id) else "\nKeeperFX (configuracao instalada)")
+	if value == 7:
+		return "Area circular usada em Objetivos e eventos. Ajuste o raio antes de colocar; o numero e automatico."
+	return "Selecione para pintar ou colocar. Use Inspecionar para editar elementos existentes."
 
 
 func _terrain_icon(id: int) -> ImageTexture:
@@ -485,8 +616,15 @@ func _terrain_icon(id: int) -> ImageTexture:
 
 func _palette_selected(index):
 	var id = palette.get_item_metadata(index)
-	selected_label = palette.get_item_text(index)
-	if category.selected in [0, 1, 4]:
+	var source_category = palette_entries[index]
+	selected_entry = "%s:%s" % [source_category, id]
+	selected_description = _entry_description(source_category, id)
+	selected_label = palette.get_item_tooltip(index).split("\n")[0]
+	inspect_toggle.set_pressed_no_signal(false)
+	_inspect_toggled(false)
+	studio_tabs.current_tab = 1
+	if source_category in [0, 1, 4]:
+		preview.texture = null
 		refs.oSelection.paintSlab = id
 		refs.oPickSlabWindow.set_selection(id)
 		refs.oPlacingSettings.set_placing_tab_and_update_it()
@@ -497,12 +635,92 @@ func _palette_selected(index):
 			refs.oBrushPreview.update_img()
 			status.text = "Coracoes e portais: carimbo 3 x 3. Clique uma vez no mapa."
 	else:
-		var type = Things.TYPE.CREATURE if category.selected == 2 else Things.TYPE.TRAP
+		var type = _category_type(source_category)
 		refs.oSelection.paintThingType = type
 		refs.oSelection.paintSubtype = id
 		refs.oPickThingWindow.set_selection(type, id)
 		refs.oUseSlabOwnerCheckBox.pressed = false
 		refs.oPlacingSettings.set_placing_tab_and_update_it()
+		preview.texture = Things.fetch_sprite(type, id)
+	recent_items.erase(selected_entry)
+	recent_items.push_front(selected_entry)
+	recent_items.resize(int(min(20, recent_items.size())))
+	_save_palette_preferences()
+	_update_favorite_button()
+
+
+func _save_palette_preferences():
+	Settings.config.set_value("studio", "favorites", favorites)
+	Settings.config.set_value("studio", "recent_items", recent_items)
+	if Settings.config.save(Settings.settings_file_path) != OK:
+		refs.oMessage.big("Preferencias", "Nao foi possivel salvar favoritos e recentes.")
+
+
+func _update_favorite_button():
+	favorite_button.disabled = selected_entry.empty()
+	favorite_button.text = "Remover dos favoritos" if selected_entry in favorites else "Adicionar aos favoritos"
+
+
+func _favorite():
+	if selected_entry.empty():
+		return
+	if selected_entry in favorites:
+		favorites.erase(selected_entry)
+	else:
+		favorites.append(selected_entry)
+	_save_palette_preferences()
+	_update_favorite_button()
+	_refresh_palette()
+
+
+func _area_radius_changed(value):
+	refs.oPlacingSettings.pointRange = int(value)
+
+
+func _inspect_toggled(enabled):
+	inspecting = enabled
+	refs.oSelector.holdClickOnInstance = null
+	refs.oSelector.draggingInstance = false
+	refs.oRectangleSelection.clear()
+	if enabled:
+		refs.oSelector.change_mode(refs.oSelector.MODE_SUBTILE)
+		status.text = "Inspecao: clique para selecionar. Nao coloca nem arrasta elementos."
+	else:
+		status.text = "Edicao: escolha um elemento na paleta para colocar."
+
+
+func _update_preview():
+	if not is_instance_valid(preview):
+		return
+	var selection = refs.oSelection
+	var key = "%s:%s" % [selection.paintThingType, selection.paintSubtype]
+	if key != preview_key and selection.paintThingType != null and selection.paintSubtype != null:
+		preview_key = key
+		preview.texture = Things.fetch_sprite(selection.paintThingType, selection.paintSubtype)
+	preview.visible = panel.visible and not inspecting and refs.oSelector.visible and refs.oSelector.mode == refs.oSelector.MODE_SUBTILE and preview.texture != null and not refs.oLoadingBar.visible
+	preview.global_position = (refs.oSelector.cursorSubtile + Vector2(0.5, 0.5)) * Constants.SUBTILE_SIZE
+
+
+func _powers():
+	if _has_map():
+		map_tools.open_powers()
+
+
+func _events():
+	if _has_map():
+		map_tools.open_events()
+
+
+func _edit_element():
+	map_tools.open_inspector()
+
+
+func _duplicate_element():
+	map_tools.duplicate_element()
+
+
+func _delete_element():
+	map_tools.delete_element()
 
 
 func _tool_selected(index):

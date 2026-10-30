@@ -28,6 +28,57 @@ Configure sua propria copia legal do jogo em **Configurar jogos**.
 Para gerar o executavel, execute `Build-Studio.ps1 -GodotPath` com o caminho
 do runtime oficial compativel. O runtime e os binarios gerados nao ficam no Git.
 
+## Paleta, inspecao e regras visuais
+
+O painel possui abas **Mapa**, **Construir** e **Inspecionar**. Os atalhos
+Novo, Abrir, Salvar e Testar permanecem visiveis acima delas. A aba Mapa
+reune sincronizacao, exportacao, poderes e eventos; Construir concentra
+a paleta; Inspecionar permite selecionar sem pintar por acidente.
+
+- **Itens especiais**: revelar mapa, ressuscitar, transferir criatura,
+  roubar heroi, multiplicar criaturas, aumentar nivel, tornar seguro e
+  encontrar mundo secreto. Transferencia e mundo secreto dependem da
+  campanha; nao criam automaticamente uma ligacao entre mapas isolados.
+- **Livros de magia**: coloque livros coletaveis no terreno. O painel
+  **Poderes por jogador** e separado: define Inicio, Pesquisar ou
+  Indisponivel para cada poder do jogador escolhido. Somente as escolhas
+  alteradas sao gravadas; regras condicionais existentes sao preservadas.
+  A pesquisa depende de biblioteca, pesquisadores e configuracao do jogo.
+- Use a busca por nome/descricao, inclusive sem acentos. Adicione a selecao
+  aos **Favoritos** ou filtre pelos **Recentes**, entre todas as categorias.
+  Essas preferencias sao locais. A previa semitransparente acompanha
+  o cursor antes de colocar criaturas, itens e armadilhas.
+- Ative **Inspecionar (sem pintar)** e clique em um elemento para
+  seleciona-lo sem colocar outro por acidente. **Editar selecionado**
+  muda dono e nivel de criaturas ou raio de areas. **Duplicar** prepara
+  a ferramenta com as propriedades do original; clique em um local livre
+  para colocar a copia. **Excluir** remove o selecionado, com o desfazer
+  nativo para elementos do mapa. Portas, coracoes e elementos vinculados
+  ao terreno continuam sendo editados como terreno ou nas ferramentas
+  avancadas. Livros/especiais seguem o dono da biblioteca; fora dela sao
+  neutros, conforme a mecanica do jogo.
+- **Areas de evento** cria pontos circulares numerados automaticamente.
+  O raio e medido em subblocos (tres subblocos formam um bloco de terreno).
+  No formato Gold, a colocacao respeita os numeros de area de 1 a 255.
+  Em **Objetivos e eventos**, escolha a area de entrada do Vermelho,
+  a area de surgimento, criatura, quantidade e nivel dos herois.
+  Cada evento dispara uma vez. Reaplicar na mesma area atualiza o evento,
+  sem duplicar o bloco; o formulario tambem permite remove-lo.
+- O objetivo visual **destruir um coracao inimigo** destina-se a partidas
+  individuais com o humano Vermelho. Substitui apenas a vitoria padrao
+  "todos os inimigos"; nao apaga vitorias manuais desconhecidas. Remover
+  esse objetivo nao restaura automaticamente outra condicao de vitoria.
+  Confira **Verificar** antes de exportar.
+
+Os formularios mostram o script resultante antes de aplicar. Abrir/cancelar
+nao altera as regras. Eles recusam scripts com IF/ENDIF desequilibrados,
+mapas com Lua e alteracoes concorrentes no mapa/script. Regras avancadas
+continuam disponiveis no Unearth. Itens adicionais dependentes da
+configuracao do KeeperFX nao sao oferecidos no perfil Gold.
+
+Depois de aplicar, use **Salvar mapa** e reinicie a fase para carregar
+as alteracoes. Os formularios nao mudam partidas ja salvas.
+
 ## Salvamento sincronizado com o KeeperFX
 
 Nesta instalacao, **Salvar mapa/Ctrl+S** tambem pode atualizar o mapa no

@@ -55,11 +55,15 @@ func place_new_light(newThingType, newSubtype, newPosition, newOwnership, newAtt
 	return id
 
 func place_new_action_point(newThingType, newSubtype, newPosition, newOwnership):
+	var number = get_free_action_point_number()
+	if oCurrentFormat.selected == Constants.OldFormat and number > 255:
+		oMessage.big("Limite do Gold", "O formato classico permite numeros de area de 1 a 255. Remova uma area sem uso ou utilize um mapa no formato KeeperFX.")
+		return
 	var id = actionPointScn.instance()
 	id.locationX = newPosition.x
 	id.locationY = newPosition.y
 	id.pointRange = oPlacingSettings.pointRange
-	id.pointNumber = get_free_action_point_number()
+	id.pointNumber = number
 	id.data7 = 0
 	add_instance(id)
 	

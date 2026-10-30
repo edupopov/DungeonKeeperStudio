@@ -100,6 +100,9 @@ func _run():
 		check(creature.ownership == 1, "Dono aplicado a criatura")
 		check(creature.subtype == refs.oSelection.paintSubtype, "Criatura escolhida pela paleta foi colocada")
 		check(get_tree().get_nodes_in_group("Creature").size() == creatures_before + 1, "Criatura adicionada ao mapa")
+		var ux = _check_ux(studio, creature)
+		if ux is GDScriptFunctionState:
+			yield(ux, "completed")
 		refs.oEditor.mapHasBeenEdited = true
 		var path = test_root.plus_file("map32%03d" % (700 + format))
 		check(refs.oSaveMap.save_map(path), "Exportacao de arquivos - perfil %s" % format)
@@ -120,6 +123,14 @@ func _run():
 		check(get_tree().get_nodes_in_group("Creature").size() == creatures_before + 1, "Criaturas preservadas apos reabrir")
 		check(refs.oCurrentFormat.selected == format, "Compatibilidade preservada apos reabrir")
 		check(get_tree().get_nodes_in_group("Creature")[-1].creatureLevel == 4, "Nivel preservado no round-trip")
+		var specials = 0
+		var books = 0
+		for object in get_tree().get_nodes_in_group("Object"):
+			specials += int(object.subtype == 91)
+			books += int(object.subtype == 18)
+		check(specials == 1 and books == 1, "Especial e livro preservados no round-trip")
+		check(get_tree().get_nodes_in_group("ActionPoint").size() == 2, "Areas preservadas no round-trip")
+		check("REM STUDIO-BEGIN EVENT_" in refs.oDataScript.data and "POWER_HEAL_CREATURE,1,1" in refs.oDataScript.data, "Eventos e poderes preservados no round-trip")
 		studio.category.select(0)
 		studio._refresh_palette()
 		studio._palette_selected(0)
@@ -320,3 +331,142 @@ func _run():
 func _timeout():
 	printerr("STUDIO_TEST_TIMEOUT")
 	get_tree().quit(2)
+
+
+func _select_entry(studio, source_category: int, id: int) -> bool:
+	studio.palette_filter.select(0)
+	studio.search.text = ""
+	studio.category.select(source_category)
+	studio._refresh_palette()
+	for index in studio.palette.get_item_count():
+		if studio.palette.get_item_metadata(index) == id:
+			studio._palette_selected(index)
+			return true
+	check(false, "Entrada disponivel: %s:%s" % [source_category, id])
+	return false
+
+
+func _check_ux(studio, creature):
+	var refs = Nodelist.list
+	var tools = studio.map_tools
+	var favorites = studio.favorites.duplicate()
+	var recent = studio.recent_items.duplicate()
+	check(_select_entry(studio, 5, 91), "Especial aumentar nivel disponivel")
+	check(refs.oSelection.paintThingType == Things.TYPE.OBJECT and refs.oSelection.paintSubtype == 91, "Especial seleciona o objeto real do jogo")
+	yield(get_tree().create_timer(0.2), "timeout")
+	_capture_view("studio-specials.png")
+	check(studio.catalog.search_key("Transferência") == "transferencia", "Busca ignora acentos")
+	studio.search.text = "transferir"
+	studio._refresh_palette()
+	check(studio.palette.get_item_count() == 1 and studio.palette.get_item_metadata(0) == 88, "Busca encontra transferencia sem confundir roubar heroi")
+	_select_entry(studio, 5, 91)
+	studio.favorites.erase("5:91")
+	studio._favorite()
+	studio.palette_filter.select(1)
+	studio._refresh_palette()
+	var favorite_found = false
+	for index in studio.palette.get_item_count():
+		favorite_found = favorite_found or (studio.palette_entries[index] == 5 and studio.palette.get_item_metadata(index) == 91)
+	check(favorite_found, "Favorito encontrado entre categorias")
+	check(Settings.config.get_value("studio", "favorites", []).has("5:91"), "Favorito persiste nas preferencias")
+	var positions = [Vector2(43, 42), Vector2(44, 42), Vector2(45, 42), Vector2(46, 42)]
+	refs.oSlabPlacement.place_shape_of_slab_id(positions, Slabs.PATH, 5)
+	yield(refs.oSlabPlacement.generate_slabs_based_on_id(positions, true), "completed")
+	_select_entry(studio, 5, 91)
+	refs.oSelection.place_subtile(Vector2(130, 127))
+	_select_entry(studio, 6, 18)
+	check(studio.preview.texture != null, "Livro possui previa antes da colocacao")
+	refs.oSelection.place_subtile(Vector2(133, 127))
+	_select_entry(studio, 7, 1)
+	studio._area_radius_changed(4)
+	refs.oSelection.place_subtile(Vector2(136, 127))
+	refs.oSelection.place_subtile(Vector2(139, 127))
+	var areas = get_tree().get_nodes_in_group("ActionPoint")
+	check(areas.size() == 2 and areas[0].pointNumber != areas[1].pointNumber and areas[0].pointRange == 4, "Areas com numero unico e raio escolhido")
+	refs.oInspector.set_inspector_instance(creature)
+	studio.studio_tabs.current_tab = 2
+	check(studio.inspecting and studio.inspect_toggle.pressed, "Aba Inspecionar ativa selecao sem pintura")
+	tools.open_inspector()
+	tools.element_owner.select(tools.element_owner.get_item_index(0))
+	tools.element_level.value = 6
+	tools._apply_element()
+	check(creature.ownership == 0 and creature.creatureLevel == 6, "Inspetor altera dono e nivel")
+	tools.duplicate_element()
+	check(not studio.inspecting and refs.oSelection.paintThingType == Things.TYPE.CREATURE and refs.oPlacingSettings.creatureLevel == 6, "Duplicar prepara copia com propriedades originais")
+	var count = get_tree().get_nodes_in_group("Creature").size()
+	refs.oSelection.place_subtile(Vector2(128, 127))
+	var copy = get_tree().get_nodes_in_group("Creature")[-1]
+	check(get_tree().get_nodes_in_group("Creature").size() == count + 1 and copy.creatureLevel == 6, "Copia colocada no local escolhido")
+	refs.oInspector.set_inspector_instance(copy)
+	tools.delete_element()
+	check(get_tree().get_nodes_in_group("Creature").size() == count, "Excluir remove somente a copia selecionada")
+	creature.ownership = 1
+	creature.creatureLevel = 4
+	tools.open_powers()
+	yield(get_tree(), "idle_frame")
+	_capture_view("studio-powers.png")
+	check(tools.powers_result() == refs.oDataScript.data, "Abrir poderes nao altera o script")
+	for row in tools.power_rows:
+		if row.power == "POWER_HEAL_CREATURE":
+			row.control.select(2)
+	tools._apply_powers()
+	check("MAGIC_AVAILABLE(PLAYER0,POWER_HEAL_CREATURE,1,1)" in refs.oDataScript.data, "Formulario libera cura inicial apenas para Vermelho")
+	check(tools.managed_block("REM STUDIO-BEGIN GOAL\n", "GOAL", []).error != "", "Marcadores incompletos nao sao sobrescritos")
+	tools.open_events()
+	check(tools.event_result().error.empty(), "Objetivo aceita adversario com coracao")
+	tools._apply_event()
+	check("IF(PLAYER1,DUNGEON_DESTROYED == 1)" in refs.oDataScript.data and not "IF(PLAYER0,ALL_DUNGEONS_DESTROYED" in refs.oDataScript.data, "Objetivo especifico substitui somente vitoria padrao")
+	tools.open_events()
+	tools.event_kind.select(1)
+	tools.destination.select(1)
+	tools._update_event_preview()
+	yield(get_tree(), "idle_frame")
+	_capture_view("studio-events.png")
+	tools._apply_event()
+	check("IF_ACTION_POINT(%s,PLAYER0)" % areas[0].pointNumber in refs.oDataScript.data and "ADD_CREATURE_TO_LEVEL(PLAYER_GOOD," in refs.oDataScript.data, "Formulario cria evento com areas existentes")
+	check("MAGIC_AVAILABLE(PLAYER0,POWER_HEAL_CREATURE,1,1)" in refs.oDataScript.data, "Evento preserva disponibilidade de poderes")
+	var once = refs.oDataScript.data
+	tools.open_events()
+	tools.event_kind.select(1)
+	tools.destination.select(1)
+	tools._apply_event()
+	check(refs.oDataScript.data == once, "Reaplicar evento nao duplica comandos")
+	refs.oInspector.set_inspector_instance(areas[1])
+	tools.delete_element()
+	check(areas[1].is_in_group("ActionPoint"), "Area de surgimento usada pelo evento nao pode ser excluida pelo painel")
+	tools.open_powers()
+	refs.oDataScript.data += "\nREM edicao externa"
+	tools._apply_powers()
+	check(refs.oDataScript.data.ends_with("REM edicao externa"), "Formulario recusa sobrescrever edicao concorrente")
+	refs.oDataScript.data = once
+	tools.powers.hide()
+	check(tools.patcher.parse(refs.oDataScript.data).error_line == 0, "Script gerado mantem IF/ENDIF equilibrados")
+	for _i in range(3, 256):
+		refs.oInstances.place_new_action_point(Things.TYPE.EXTRA, 1, Vector3(136.5, 127.5, 0), 5)
+	check(refs.oInstances.get_free_action_point_number() == 256, "Numeros de area 1 a 255 preenchidos sem colisao")
+	refs.oInstances.place_new_action_point(Things.TYPE.EXTRA, 1, Vector3(136.5, 127.5, 0), 5)
+	check(get_tree().get_nodes_in_group("ActionPoint").size() == (255 if refs.oCurrentFormat.selected == Constants.OldFormat else 256), "Gold bloqueia area 256; KeeperFX preserva formato estendido")
+	for area in get_tree().get_nodes_in_group("ActionPoint"):
+		if not area in areas:
+			refs.oInstances.kill_instance(area)
+	studio.favorites = favorites
+	studio.recent_items = recent
+	studio._save_palette_preferences()
+	studio.inspect_toggle.set_pressed_no_signal(false)
+	studio._inspect_toggled(false)
+	studio.owner_picker.select(1)
+	studio._owner_selected(1)
+	studio._level_changed(4)
+	for message in refs.oUiMessages.get_children():
+		if message is WindowDialog:
+			message.hide()
+
+
+func _capture_view(name: String):
+	for message in Nodelist.list.oUiMessages.get_children():
+		if message is WindowDialog:
+			message.hide()
+	VisualServer.force_draw()
+	var image = get_tree().root.get_texture().get_data()
+	image.flip_y()
+	image.save_png(OS.get_environment("TEMP").plus_file(name))
