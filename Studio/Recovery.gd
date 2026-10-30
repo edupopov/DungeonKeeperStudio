@@ -234,6 +234,8 @@ func saved(game: bool):
 		Settings.config.set_value("studio", "last_local_save", last_local)
 	if not studio._save_profiles():
 		return
+	if studio.visual_tools != null:
+		studio.visual_tools.record_save(game)
 
 
 func open_history():

@@ -78,6 +78,7 @@ var recovery
 var spatial_checks
 var missions
 var library
+var visual_tools
 
 
 func _ready():
@@ -103,6 +104,9 @@ func _ready():
 	library = load("res://Studio/MapLibrary.gd").new()
 	library.studio = self
 	add_child(library)
+	visual_tools = load("res://Studio/VisualTools.gd").new()
+	visual_tools.studio = self
+	add_child(visual_tools)
 	_translate_interface()
 	get_tree().connect("files_dropped", self, "_files_dropped")
 	call_deferred("_start")
@@ -166,6 +170,13 @@ func _build_ui():
 	font.font_data = load("res://Theme/Hack_Regular.ttf")
 	font.size = 14
 	studio_theme.default_font = font
+	var surface = StyleBoxFlat.new()
+	surface.bg_color = Color("#252732")
+	surface.border_color = Color("#64563e")
+	surface.set_border_width_all(1)
+	for margin in [MARGIN_LEFT, MARGIN_TOP, MARGIN_RIGHT, MARGIN_BOTTOM]:
+		surface.set_default_margin(margin, 9)
+	studio_theme.set_stylebox("panel", "PanelContainer", surface)
 	panel.theme = studio_theme
 	refs.oUiTools.add_child(panel)
 	var box = VBoxContainer.new()
@@ -275,6 +286,8 @@ func _build_ui():
 	box.add_child(advanced)
 	advanced.connect("toggled", self, "_advanced_changed")
 	status = _label(root_box, "Os mapas originais sao protegidos.")
+	status.clip_text = true
+	status.max_lines_visible = 2
 	status.add_color_override("font_color", Color("#a8c9a1"))
 	get_viewport().connect("size_changed", self, "_layout")
 	_build_dialogs()
@@ -475,6 +488,7 @@ func _translate_labels(node: Node, translations: Dictionary):
 
 func _process(delta):
 	_update_preview()
+	status.hint_tooltip = status.text
 	elapsed += delta
 	if elapsed < 0.15:
 		return
@@ -572,7 +586,7 @@ func _append_palette_category(source_category: int):
 					continue
 				if refs.oCurrentFormat.selected == Constants.OldFormat and id > 30:
 					continue
-				entries.append([Things.fetch_name(Things.TYPE.CREATURE, id), id])
+				entries.append([catalog.creature_name(id), id])
 		3:
 			for id in Things.DATA_TRAP:
 				if id == 0 or (refs.oCurrentFormat.selected == Constants.OldFormat and id > 6):
@@ -623,6 +637,8 @@ func _entry_description(value: int, id: int) -> String:
 		return text + ("\nGold / KeeperFX" if Catalog.OBJECTS.has(id) else "\nKeeperFX (configuracao instalada)")
 	if value == 7:
 		return "Area circular usada em Objetivos e eventos. Ajuste o raio antes de colocar; o numero e automatico."
+	if value == 2:
+		return catalog.creature_name(id) + " | " + Things.fetch_name(Things.TYPE.CREATURE, id) + "\nEscolha dono e nivel antes de colocar."
 	return "Selecione para pintar ou colocar. Use Inspecionar para editar elementos existentes."
 
 
@@ -754,6 +770,8 @@ func _delete_element():
 
 
 func _tool_selected(index):
+	if construction != null:
+		construction.cancel()
 	var buttons = ["oToolPencil", "oToolBrush", "oToolRectangle", "oToolPaintBucket"]
 	refs[buttons[index]].pressed = true
 

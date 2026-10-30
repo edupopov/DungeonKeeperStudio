@@ -38,7 +38,8 @@ func _dialog(title: String) -> ConfirmationDialog:
 	var dialog = ConfirmationDialog.new()
 	dialog.window_title = title
 	dialog.resizable = true
-	dialog.rect_min_size = Vector2(640, 440)
+	dialog.rect_min_size = Vector2(420, 280)
+	dialog.theme = studio.panel.theme
 	dialog.get_ok().text = "Aplicar"
 	dialog.get_cancel().text = "Cancelar"
 	dialog.dialog_hide_on_ok = false
@@ -48,7 +49,7 @@ func _dialog(title: String) -> ConfirmationDialog:
 
 func _body(dialog: WindowDialog) -> VBoxContainer:
 	var scroll = ScrollContainer.new()
-	scroll.rect_min_size = Vector2(600, 360)
+	scroll.rect_min_size = Vector2(360, 180)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dialog.add_child(scroll)
 	var box = VBoxContainer.new()
@@ -58,9 +59,13 @@ func _body(dialog: WindowDialog) -> VBoxContainer:
 
 
 func _show(dialog: WindowDialog):
-	var available = get_viewport().size / dialog.get_global_transform().get_scale()
-	dialog.rect_size = Vector2(min(900, available.x * 0.9), min(680, available.y * 0.85))
+	var size = get_viewport().size
+	size.x = min(size.x, OS.window_size.x)
+	size.y = min(size.y, OS.window_size.y)
+	var available = size / dialog.get_global_transform().get_scale()
+	dialog.rect_size = Vector2(min(900, available.x * 0.9), min(680, max(280, available.y - 140)))
 	Utils.popup_centered(dialog)
+	dialog.rect_position.y = max(72, (available.y - dialog.rect_size.y) / 2)
 	if dialog is AcceptDialog:
 		dialog.get_ok().text = "Aplicar"
 
@@ -103,6 +108,13 @@ func _labelled_picker(box: VBoxContainer, title: String) -> OptionButton:
 	var picker = OptionButton.new()
 	box.add_child(picker)
 	return picker
+
+
+func _creature_option(picker: OptionButton, id: int):
+	picker.add_item(studio.catalog.creature_name(id), id)
+	var index = picker.get_item_count() - 1
+	picker.set_item_icon(index, Things.fetch_icon_sprite(Things.TYPE.CREATURE, id, Vector2(24, 24), 2.0))
+	picker.get_popup().set_item_tooltip(index, Things.fetch_name(Things.TYPE.CREATURE, id))
 
 
 func _changed_script(source: String, path: String, format: int) -> bool:
@@ -359,7 +371,7 @@ func open_events():
 	studio._label(box, "Crie areas pela categoria Areas de evento; ajuste o raio e clique no mapa.\nO evento dispara uma vez. Herois pertencem a PLAYER_GOOD.")
 	event_creature = _labelled_picker(box, "Criatura dos herois")
 	for creature in refs.oScriptGenerator.get_creature_list():
-		event_creature.add_item(Things.fetch_name(Things.TYPE.CREATURE, creature[0]), creature[0])
+		_creature_option(event_creature, creature[0])
 	event_creature.select(max(0, event_creature.get_item_index(6)))
 	studio._label(box, "Quantidade / nivel")
 	var row = HBoxContainer.new()

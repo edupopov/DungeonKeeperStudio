@@ -6,6 +6,12 @@ var scnBigMsg = preload('res://Scenes/BigMessageInstance.tscn')
 var recentMessages = {}
 
 func quick(string):
+	var studio = get_tree().current_scene.get_node_or_null("Studio")
+	if studio != null and is_instance_valid(studio.advanced) and not studio.advanced.pressed:
+		string = {"Saved map": "Mapa salvo localmente", "Saved map.": "Mapa salvo localmente"}.get(string, string)
+		for previous in $VBoxContainer.get_children():
+			$VBoxContainer.remove_child(previous)
+			previous.queue_free()
 	var currentTime = OS.get_ticks_msec() / 1000.0
 	if recentMessages.has(string):
 		var lastTime = recentMessages[string]

@@ -295,6 +295,13 @@ func _run():
 		if expanded is GDScriptFunctionState:
 			yield(expanded, "completed")
 		expansion.queue_free()
+		var visual = load("res://Studio/VisualTest.gd").new()
+		add_child(visual)
+		visual.smoke = self
+		var visual_result = visual.run(studio)
+		if visual_result is GDScriptFunctionState:
+			yield(visual_result, "completed")
+		visual.queue_free()
 		studio.sync_enabled = false
 		studio.fx_exe = previous_sync[2]
 		studio.workspace = original_workspace

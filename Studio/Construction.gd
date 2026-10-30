@@ -27,11 +27,20 @@ var turn_picker: OptionButton
 var mirror_check: CheckBox
 var replace_check: CheckBox
 var target_owner: OptionButton
+var selected_rect = Rect2()
+var selected_path = ""
+var preview_error = ""
+var preview_elapsed = 0.0
+var ghost_icons = {}
+var preview_font: DynamicFont
 
 
 func _ready():
 	refs = studio.refs
 	z_index = 90
+	preview_font = DynamicFont.new()
+	preview_font.font_data = load("res://Theme/Hack_Regular.ttf")
+	preview_font.size = 14
 
 
 func cancel():
@@ -46,6 +55,10 @@ func _process(_delta):
 	if mode != "" and (source_path != refs.oCurrentMap.path or source_format != refs.oCurrentFormat.selected):
 		cancel()
 	if mode != "":
+		preview_elapsed += _delta
+		if preview_elapsed >= 0.15:
+			preview_elapsed = 0
+			preview_error = placement_error(refs.oSelector.cursorTile) if mode in ["stamp", "paste"] else ""
 		update()
 
 
@@ -57,6 +70,8 @@ func _unhandled_input(event):
 
 
 func _draw():
+	if selected_rect.size != Vector2.ZERO and selected_path == refs.oCurrentMap.path:
+		draw_rect(Rect2(selected_rect.position * 96, selected_rect.size * 96), Color(0.35, 0.85, 1, 0.9), false, 5)
 	if mode.empty() or not refs.oSelector.visible:
 		return
 	var cursor = refs.oSelector.cursorTile
@@ -65,8 +80,84 @@ func _draw():
 		rect = Rect2(Vector2(min(first.x, cursor.x), min(first.y, cursor.y)), (first - cursor).abs() + Vector2.ONE)
 	elif mode in ["stamp", "paste"] and not clipboard.empty():
 		rect.size = transformed_size()
-	draw_rect(Rect2(rect.position * 96, rect.size * 96), Color(0.3, 0.8, 1, 0.12), true)
-	draw_rect(Rect2(rect.position * 96, rect.size * 96), Color(0.3, 0.8, 1, 0.9), false, 4)
+	var color = Color("#74e5ab") if preview_error.empty() else Color("#ff807a")
+	if mode == "select":
+		color = Color("#78ceff")
+		var bounds = Rect2(Vector2.ZERO, Vector2(M.xSize, M.ySize) * 96)
+		var world = Rect2(rect.position * 96, rect.size * 96)
+		for outside in [Rect2(0, 0, bounds.size.x, world.position.y),
+				Rect2(0, world.end.y, bounds.size.x, max(0, bounds.size.y - world.end.y)),
+				Rect2(0, world.position.y, world.position.x, world.size.y),
+				Rect2(world.end.x, world.position.y, max(0, bounds.size.x - world.end.x), world.size.y)]:
+			draw_rect(outside, Color(0, 0, 0, 0.35))
+	else:
+		for cell in clipboard.cells:
+			var pos = cursor + transform_point(cell[0], clipboard.size, true)
+			var tile_color = _slab_color(cell[1])
+			tile_color.a = 0.65
+			draw_rect(Rect2(pos * 96 + Vector2.ONE * 2, Vector2.ONE * 92), tile_color)
+			if destination_conflict(pos):
+				draw_rect(Rect2(pos * 96, Vector2.ONE * 96), Color(1, 0.15, 0.15, 0.5))
+				draw_line(pos * 96, (pos + Vector2.ONE) * 96, Color("#ffcccc"), 4)
+		for thing in clipboard.things:
+			var point = cursor * 96 + transform_point(thing.pos, clipboard.size * 3, false) * 32
+			var key = str([thing.type, thing.subtype])
+			if not ghost_icons.has(key):
+				ghost_icons[key] = Things.fetch_icon_sprite(thing.type, thing.subtype, Vector2(48, 48), 2.0)
+			if ghost_icons[key] != null:
+				draw_texture_rect(ghost_icons[key], Rect2(point - Vector2.ONE * 32, Vector2.ONE * 64), false, Color(1, 1, 1, 0.7))
+			else:
+				draw_circle(point, 15, color)
+	draw_rect(Rect2(rect.position * 96, rect.size * 96), Color(color.r, color.g, color.b, 0.1))
+	draw_rect(Rect2(rect.position * 96, rect.size * 96), color, false, 5)
+	var summary = "%s x %s blocos" % [rect.size.x, rect.size.y]
+	if mode in ["stamp", "paste"]:
+		summary += " | %s elementos | %s graus%s" % [clipboard.things.size(), turns * 90, " | espelho" if mirrored else ""]
+		summary += "\n" + ("Permitido | R: girar | F: espelhar" if preview_error.empty() else preview_error)
+	else:
+		var counts = selection_counts(rect)
+		summary += " | %s criaturas | %s itens" % [counts.creatures, counts.items]
+	var zoom = refs.oCamera2D.zoom.x
+	var label_pos = rect.position * 96 + Vector2(0, -42 * zoom)
+	draw_set_transform(label_pos, 0, Vector2.ONE * zoom)
+	draw_rect(Rect2(-6, -16, 580, 40), Color(0.08, 0.09, 0.12, 0.94))
+	var line_y = 0
+	for line in summary.split("\n"):
+		draw_string(preview_font, Vector2(0, line_y), line, color, 570)
+		line_y += 18
+	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+
+
+func _slab_color(slab: int) -> Color:
+	return {0: Color("#595c67"), 1: Color("#d8ad35"), 2: Color("#906033"),
+		10: Color("#b09c73"), 11: Color("#ad4947"), 12: Color("#f35420"),
+		13: Color("#448ed0"), 14: Color("#9b72dc"), 26: Color("#e74c64"),
+		38: Color("#95ad6e"), 36: Color("#d9ac72"), 16: Color("#e8bf57")}.get(slab, Color("#8fa2b8"))
+
+
+func selection_counts(rect: Rect2) -> Dictionary:
+	var counts = {"creatures": 0, "items": 0}
+	for node in get_tree().get_nodes_in_group("Instance"):
+		if rect.has_point(Vector2(node.locationX, node.locationY) / 3):
+			if node.is_in_group("Creature"):
+				counts.creatures += 1
+			elif node.is_in_group("Object") or node.is_in_group("Trap") or node.is_in_group("Door"):
+				counts.items += 1
+	return counts
+
+
+func destination_conflict(pos: Vector2) -> bool:
+	if not Rect2(Vector2.ONE, Vector2(M.xSize - 2, M.ySize - 2)).has_point(pos):
+		return true
+	var slab = refs.oDataSlab.get_cellv(pos)
+	if slab == Slabs.DUNGEON_HEART or (not overwrite and not slab in [Slabs.EARTH, Slabs.ROCK, Slabs.PATH]):
+		return true
+	for node in get_tree().get_nodes_in_group("slab_location_group_%s_%s" % [int(pos.x), int(pos.y)]):
+		if node.is_in_group("ActionPoint") or (node.is_in_group("Object") and (node.subtype == 5 or node.subtype in Things.LIST_OF_HEROGATES)):
+			return true
+		if not overwrite and (node.is_in_group("Creature") or node.is_in_group("Trap") or (node.is_in_group("Object") and node.parentTile == 65535)):
+			return true
+	return false
 
 
 func field_input() -> bool:
@@ -81,6 +172,10 @@ func field_input() -> bool:
 				first = cursor
 				studio.status.text = "Escolha o canto oposto da area. Esc cancela."
 			else:
+				var placement_issue = placement_error(cursor)
+				if not placement_issue.empty():
+					studio.map_tools._error(placement_issue)
+					return true
 				var rect = Rect2(Vector2(min(first.x, cursor.x), min(first.y, cursor.y)), (first - cursor).abs() + Vector2.ONE)
 				var error = capture(rect)
 				cancel()
@@ -163,6 +258,7 @@ func _arm(next_mode: String):
 	source_path = refs.oCurrentMap.path
 	source_format = refs.oCurrentFormat.selected
 	mode = next_mode
+	preview_error = placement_error(refs.oSelector.cursorTile) if mode in ["stamp", "paste"] else ""
 	studio.inspect_toggle.set_pressed_no_signal(false)
 	studio.inspecting = false
 	refs.oSelector.holdClickOnInstance = null
@@ -174,6 +270,7 @@ func begin_copy():
 	if not studio._has_map() or placing:
 		return
 	first = Vector2(-1, -1)
+	selected_rect = Rect2()
 	_arm("select")
 
 
@@ -235,6 +332,8 @@ func capture(rect: Rect2) -> String:
 				fields[field] = id.get(field)
 		things.append({"type": id.thingType, "subtype": id.subtype, "owner": id.ownership, "pos": pos - rect.position * 3, "fields": fields})
 	clipboard = {"size": rect.size, "cells": cells, "things": things, "lights": lights, "doors": doors, "base_owner": -1, "heart_owners": heart_owners.keys(), "format": refs.oCurrentFormat.selected}
+	selected_rect = rect
+	selected_path = refs.oCurrentMap.path
 	return ""
 
 

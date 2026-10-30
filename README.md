@@ -156,6 +156,51 @@ continuam jogaveis individualmente no Gold. Lua e progressao manual por
 excluidos do executavel. Uma campanha contendo mapas importados continua
 sujeita aos direitos desses mapas: a exportacao local nao autoriza publica-los.
 
+## Interface visual e ferramentas rapidas
+
+A barra fixa oferece Pintar, Selecionar, Colar, Inspecao, Base, Girar,
+Espelhar e Cancelar. O texto abaixo identifica a ferramenta ativa. Durante
+uma previa de base/colagem, **R** gira 90 graus e **F** espelha; os atalhos
+nao atuam durante digitacao nem com um formulario aberto.
+
+O carimbo fantasma mostra terreno e elementos sem alterar o mapa. A borda
+verde indica colocacao permitida; vermelho indica impedimento, e os blocos
+de destino protegidos recebem uma cruz vermelha. Um impedimento global
+(por exemplo, dono que ja tem coracao) aparece no texto da previa.
+Geometria final e decoracao continuam sendo geradas ao confirmar.
+A selecao destaca o contorno, escurece o exterior e mostra dimensoes,
+quantidade de criaturas e itens. O texto da previa mantem tamanho legivel
+ao aproximar ou afastar o mapa.
+
+**Camadas visuais** permite ocultar criaturas, itens/armadilhas/portas,
+donos do terreno, areas de evento e marcadores de validacao. Isso e somente
+visual: nao remove nem muda elementos salvos, e nao desliga sua selecao
+nas ferramentas nativas. Reative a camada antes de editar elementos ocultos.
+As escolhas valem para a sessao; o modo avancado restaura a visualizacao
+nativa. Novos elementos respeitam as camadas ocultas.
+
+O indicador fixo distingue **Alteracoes pendentes**, **Salvo localmente**
+e **Enviado ao jogo**, com horario e numero da fase quando confirmado.
+Uma nova gravacao local invalida o estado de envio anterior ate a
+sincronizacao terminar. Ao abrir outro mapa ou reiniciar o editor, um
+envio antigo nao e tratado como confirmacao atual. O Historico continua
+exibindo os ultimos horarios registrados.
+
+A biblioteca usa cartoes com miniatura, perfil Gold/KeeperFX e botoes
+Abrir/Jogar, em paginas de ate 12 mapas. Clique no nome para editar os
+metadados. Busca sem resultados limpa a selecao anterior. Criaturas do
+catalogo classico aparecem em portugues; o nome tecnico continua na dica.
+Icones usam os recursos locais ja carregados, sem distribuir os assets do jogo.
+Formularios usam fonte uniforme, rolagem para conteudo extenso e espaco
+reservado ao menu superior. Notificacoes rapidas nao se empilham no modo
+simples nem cobrem formularios; erros continuam em janelas explicitas.
+
+Os testes integrados `--studio-test` cobrem Gold e KeeperFX, incluindo
+transformacoes, salvamento/sincronizacao, recuperacao, missoes/campanhas,
+camadas, atalhos, estados do indicador, paginacao e janelas 1280 x 720 e
+1024 x 768. Execute somente em uma copia isolada do projeto, pois geram
+mapas de teste e usam configuracoes locais.
+
 ## Salvamento sincronizado com o KeeperFX
 
 Nesta instalacao, **Salvar mapa/Ctrl+S** tambem pode atualizar o mapa no

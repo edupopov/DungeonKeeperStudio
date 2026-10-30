@@ -1,5 +1,19 @@
 extends Reference
 
+const CREATURE_NAMES = {
+	1: "Mago", 2: "Barbaro", 3: "Arqueiro", 4: "Monge", 5: "Anao",
+	6: "Cavaleiro", 7: "Avatar", 8: "Tunelador", 9: "Bruxa", 10: "Gigante",
+	11: "Fada", 12: "Ladra", 13: "Samurai", 14: "Ceifador", 15: "Esqueleto",
+	16: "Troll", 17: "Dragao", 18: "Filho das trevas", 19: "Mosca",
+	20: "Amante sombria", 21: "Feiticeiro", 22: "Demonio de bile", 23: "Diabinho (imp)",
+	24: "Besouro", 25: "Vampiro", 26: "Aranha", 27: "Cao infernal",
+	28: "Fantasma", 29: "Tentaculo", 30: "Orc"
+}
+
+
+func creature_name(id: int) -> String:
+	return CREATURE_NAMES.get(id, Things.fetch_name(Things.TYPE.CREATURE, id))
+
 const OBJECTS = {
 	86: ["Revelar mapa", "Revela o terreno oculto do mapa."],
 	87: ["Ressuscitar criatura", "Permite recuperar uma criatura morta."],

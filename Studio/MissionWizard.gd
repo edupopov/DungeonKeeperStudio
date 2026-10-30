@@ -42,7 +42,7 @@ func open_wizard():
 		spawn.add_item("#%s" % ap.pointNumber, ap.pointNumber)
 	creature = studio.map_tools._labelled_picker(box, "Herois")
 	for entry in refs.oScriptGenerator.get_creature_list():
-		creature.add_item(Things.fetch_name(Things.TYPE.CREATURE, entry[0]), entry[0])
+		studio.map_tools._creature_option(creature, entry[0])
 	creature.select(max(0, creature.get_item_index(6)))
 	studio._label(box, "Quantidade / nivel")
 	var row = HBoxContainer.new()

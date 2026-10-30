@@ -22,6 +22,10 @@ var routes = []
 var play_confirm: ConfirmationDialog
 var pending_play = {}
 var thumbnails = {}
+var cards: GridContainer
+var page_label: Label
+var page = 0
+const PAGE_SIZE = 12
 
 
 func _ready():
@@ -197,6 +201,23 @@ func open_library():
 	box.add_child(listing)
 	listing.connect("item_selected", self, "_selected")
 	listing.connect("item_activated", self, "_open_index")
+	listing.hide()
+	var card_scroll = ScrollContainer.new()
+	card_scroll.rect_min_size = Vector2(360, 230)
+	box.add_child(card_scroll)
+	cards = GridContainer.new()
+	cards.columns = 3
+	cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card_scroll.add_child(cards)
+	dialog.connect("resized", self, "_layout_cards")
+	var pages = HBoxContainer.new()
+	box.add_child(pages)
+	for direction in [-1, 1]:
+		var button = Button.new()
+		button.text = "Anterior" if direction < 0 else "Proxima"
+		button.connect("pressed", self, "_page", [direction])
+		pages.add_child(button)
+	page_label = studio._label(pages, "")
 	title = LineEdit.new()
 	box.add_child(title)
 	description = TextEdit.new()
@@ -224,11 +245,75 @@ func _filter(text: String):
 	listing.clear()
 	filtered.clear()
 	selected_path = ""
+	title.text = ""
+	description.text = ""
+	location.text = "Clique no nome de um cartao para editar os metadados; Abrir/Jogar estao no proprio cartao."
 	for details in catalog:
 		if text.empty() or studio.catalog.search_key(text) in studio.catalog.search_key(details.name + " " + details.description + " " + details.path):
 			filtered.append(details)
 			listing.add_item(details.name + (" [Gold]" if details.format == Constants.OldFormat else " [KeeperFX]"), thumbnail(details))
 			listing.set_item_tooltip(listing.get_item_count() - 1, details.description + "\n" + details.path)
+	page = 0
+	_refresh_cards()
+
+
+func _page(direction: int):
+	page = int(clamp(page + direction, 0, max(0, int((filtered.size() - 1) / PAGE_SIZE))))
+	_refresh_cards()
+
+
+func _layout_cards():
+	cards.columns = 3 if dialog.rect_size.x >= 700 else 2
+
+
+func _refresh_cards():
+	for child in cards.get_children():
+		cards.remove_child(child)
+		child.queue_free()
+	_layout_cards()
+	for index in range(page * PAGE_SIZE, min(filtered.size(), (page + 1) * PAGE_SIZE)):
+		var details = filtered[index]
+		var card = VBoxContainer.new()
+		card.rect_min_size.x = 170
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cards.add_child(card)
+		var image = TextureRect.new()
+		image.texture = thumbnail(details)
+		image.rect_min_size = Vector2(112, 112)
+		image.expand = true
+		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		card.add_child(image)
+		var name_button = Button.new()
+		name_button.text = details.name
+		name_button.clip_text = true
+		name_button.hint_tooltip = details.name + "\n" + details.description + "\n" + details.path
+		name_button.connect("pressed", self, "_card_action", [index, "select"])
+		card.add_child(name_button)
+		var format_label = Label.new()
+		format_label.text = "GOLD" if details.format == Constants.OldFormat else "KEEPERFX"
+		format_label.align = Label.ALIGN_CENTER
+		format_label.add_color_override("font_color", Color("#e8bf77"))
+		card.add_child(format_label)
+		var actions = HBoxContainer.new()
+		card.add_child(actions)
+		for action in [["Abrir", "open"], ["Jogar", "play"]]:
+			var button = Button.new()
+			button.text = action[0]
+			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			button.connect("pressed", self, "_card_action", [index, action[1]])
+			actions.add_child(button)
+	page_label.text = "%s mapas | %s / %s" % [filtered.size(), page + 1, max(1, int(ceil(filtered.size() / float(PAGE_SIZE))))]
+	if filtered.empty():
+		location.text = "Nenhum mapa encontrado. Salve um mapa em Mapas ou ajuste a busca."
+
+
+func _card_action(index: int, action: String):
+	listing.select(index)
+	_selected(index)
+	if action == "open":
+		_open_selected()
+	elif action == "play":
+		_ask_play()
 
 
 func _selected(index: int):
@@ -264,6 +349,7 @@ func _store_details():
 	details.description = description.text
 	if not listing.get_selected_items().empty():
 		listing.set_item_text(listing.get_selected_items()[0], details.name + (" [Gold]" if details.format == Constants.OldFormat else " [KeeperFX]"))
+	_refresh_cards()
 	location.text = "Metadados locais guardados. O arquivo do mapa nao foi alterado."
 
 
