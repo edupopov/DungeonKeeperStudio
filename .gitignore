@@ -27,6 +27,7 @@ data_*/
 
 # Local game data, personal settings and generated packages
 /Runtime/
+/Requisitos/Aplicativos/
 /DungeonKeeperStudio.exe
 /DungeonKeeperStudio.pck
 /backups/

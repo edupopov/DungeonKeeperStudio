@@ -23,10 +23,42 @@ Para obter o projeto:
 git clone https://github.com/edupopov/DungeonKeeperStudio.git
 ```
 
-Baixe o Godot 3.6.3, abra `project.godot` e aguarde a importacao.
-Configure sua propria copia legal do jogo em **Configurar jogos**.
-Para gerar o executavel, execute `Build-Studio.ps1 -GodotPath` com o caminho
-do runtime oficial compativel. O runtime e os binarios gerados nao ficam no Git.
+## Pre-requisitos e aplicativos
+
+Para este kit, use **Windows x64**, driver com **OpenGL 3.3** e uma copia
+legal dos dados do Dungeon Keeper. A versao pronta precisa do EXE e PCK
+juntos e nao exige instalar Godot separadamente. Para editar/compilar o
+fonte, use **Godot 3.6.3 Standard** (nao Godot 4 nem .NET/Mono).
+KeeperFX e necessario para sincronizacao, mapas estendidos e campanhas
+encadeadas; o Gold atende aos mapas individuais classicos.
+
+A pasta [Requisitos](Requisitos/README.md) documenta hardware, aplicativos,
+instalacao do jogo, compilacao, licencas e solucao de problemas. Ela inclui
+um script que baixa o **Godot portatil**, o instalador opcional do **7-Zip**
+e o **instalador web do KeeperFX** de fontes oficiais, com verificacao
+SHA-256, sem executar instaladores:
+
+```powershell
+.\Requisitos\Baixar-Aplicativos.ps1
+```
+
+Os arquivos baixados ficam em `Requisitos\Aplicativos` somente no computador,
+ignorados pelo Git e excluidos do pacote do editor. O GitHub guarda o
+script reproduzivel e a documentacao. O jogo KeeperFX completo, Gold e dados
+comerciais nao sao empacotados aqui; o instalador web precisa obter o
+KeeperFX e importar sua copia legal do Gold. Os atalhos levam aos sites oficiais.
+
+Abra `project.godot` no Godot baixado, aguarde a importacao e configure sua
+copia do jogo em **Configurar jogos**. Feche o Studio antes de gerar
+a versao pronta:
+
+```powershell
+.\Build-Studio.ps1 -GodotPath ".\Requisitos\Aplicativos\Godot-3.6.3\Godot_v3.6.3-stable_win64.exe"
+```
+
+Consulte o [guia completo de requisitos](Requisitos/README.md) antes de
+configurar ou atualizar um jogo existente. Python, Node.js, Java e Visual
+Studio nao sao requisitos deste editor.
 
 ## Paleta, inspecao e regras visuais
 
