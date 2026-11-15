@@ -108,6 +108,7 @@ func _ready():
 	visual_tools.studio = self
 	add_child(visual_tools)
 	_translate_interface()
+	_add_studio_menus()
 	get_tree().connect("files_dropped", self, "_files_dropped")
 	call_deferred("_start")
 
@@ -484,6 +485,44 @@ func _translate_labels(node: Node, translations: Dictionary):
 			node.text = translations[node.text]
 	for child in node.get_children():
 		_translate_labels(child, translations)
+
+func _add_studio_menus():
+	var map_menu = refs.oMenuButtonMap.get_popup()
+	map_menu.add_separator()
+	for item in [["Colocar criaturas", 100], ["Colocar livros de feitico", 101],
+			["Colocar itens especiais", 102], ["Colocar areas de evento", 103]]:
+		map_menu.add_item(item[0], item[1])
+	map_menu.connect("id_pressed", self, "_studio_map_menu")
+	var rules_menu = refs.oMenuButtonScript.get_popup()
+	rules_menu.add_separator()
+	for item in [["Feiticos por jogador", 100], ["Objetivos e surgimento de herois", 101],
+			["Assistente de missao encadeada", 102]]:
+		rules_menu.add_item(item[0], item[1])
+	rules_menu.connect("id_pressed", self, "_studio_rules_menu")
+
+
+func _studio_map_menu(id: int):
+	if id < 100 or id > 103 or not _has_map():
+		return
+	if refs.oEditor.currentView != refs.oEditor.VIEW_2D:
+		refs.oMessage.big("Modo 2D necessario", "Volte para a visualizacao 2D antes de colocar elementos.")
+		return
+	advanced.pressed = true
+	refs.oSelector.change_mode(refs.oSelector.MODE_SUBTILE)
+	var picker = refs.oPickThingWindow
+	var category_id = [picker.TAB_CREATURE, picker.TAB_SPELL, picker.TAB_SPECIAL, picker.TAB_ACTION][id - 100]
+	refs.oThingTabs.set_current_tab(picker.tabs[category_id][0].get_index())
+	if id == 103:
+		picker.set_selection(Things.TYPE.EXTRA, 1)
+		refs.oPlacingSettings.set_placing_tab_and_update_it()
+	refs.oPickThingWindow.show()
+
+
+func _studio_rules_menu(id: int):
+	match id:
+		100: _powers()
+		101: _events()
+		102: _mission()
 
 
 func _process(delta):

@@ -13,12 +13,16 @@ var current_player = 0
 var power_preview: TextEdit
 var events: ConfirmationDialog
 var event_kind: OptionButton
-var enemy: OptionButton
+var enemies = []
+var goal_box: VBoxContainer
+var event_box: VBoxContainer
 var trigger: OptionButton
 var destination: OptionButton
+var trigger_player: OptionButton
 var event_creature: OptionButton
 var event_count: SpinBox
 var event_level: SpinBox
+var additional_heroes = []
 var event_source = ""
 var event_path = ""
 var event_format = -1
@@ -355,37 +359,83 @@ func open_events():
 	event_path = refs.oCurrentMap.path
 	event_format = refs.oCurrentFormat.selected
 	var box = _body(events)
-	studio._label(box, "Formularios para partidas individuais (voce: Vermelho).\nAs regras manuais sao preservadas. Cada area pode ter um evento deste formulario.\nUma vitoria especifica substitui apenas a vitoria padrao 'todos os inimigos'.")
+	studio._label(box, "Partida individual: Vermelho e o jogador humano.\nAs regras manuais sao preservadas. Cada area pode ter um evento deste formulario.\nA vitoria exige TODOS os coracoes marcados e substitui apenas a vitoria padrao.")
 	event_kind = _labelled_picker(box, "Acao")
-	for text in ["Vencer ao destruir um coracao inimigo", "Ao entrar numa area, surgem herois", "Remover objetivo criado pelo Studio", "Remover evento da area"]:
+	for text in ["Vencer ao destruir os coracoes escolhidos", "Ao entrar numa area, surgem herois", "Remover objetivo criado pelo Studio", "Remover evento da area"]:
 		event_kind.add_item(text)
-	enemy = _labelled_picker(box, "Coracao inimigo (objetivo)")
-	_players(enemy)
-	if enemy.get_item_count() > 1:
-		enemy.select(1)
-	trigger = _labelled_picker(box, "Area de entrada do Vermelho (evento)")
-	destination = _labelled_picker(box, "Area de surgimento (evento)")
+	goal_box = VBoxContainer.new()
+	box.add_child(goal_box)
+	studio._label(goal_box, "Coracoes inimigos obrigatorios (objetivo)")
+	enemies.clear()
+	var saved_owners = _managed_goal_owners(event_source)
+	for owner in [1, 2, 3, 6, 7, 8]:
+		if refs.oCurrentFormat.selected == Constants.OldFormat and owner > 3:
+			continue
+		var check = CheckBox.new()
+		check.text = studio.OWNER_NAMES[owner] + (" (sem coracao)" if not refs.oInstances.check_for_dungeon_heart(owner) else "")
+		check.pressed = owner in saved_owners if not saved_owners.empty() else owner == 1 and refs.oInstances.check_for_dungeon_heart(owner)
+		check.set_meta("owner", owner)
+		check.connect("toggled", self, "_update_event_preview")
+		goal_box.add_child(check)
+		enemies.append(check)
+	event_box = VBoxContainer.new()
+	box.add_child(event_box)
+	trigger_player = _labelled_picker(event_box, "Quem ativa: qualquer criatura deste jogador")
+	_players(trigger_player)
+	trigger = _labelled_picker(event_box, "Area de entrada (evento)")
+	destination = _labelled_picker(event_box, "Area de surgimento (evento)")
 	for ap in get_tree().get_nodes_in_group("ActionPoint"):
 		for picker in [trigger, destination]:
 			picker.add_item("#%s (%s, %s)" % [ap.pointNumber, ap.locationX, ap.locationY], ap.pointNumber)
-	studio._label(box, "Crie areas pela categoria Areas de evento; ajuste o raio e clique no mapa.\nO evento dispara uma vez. Herois pertencem a PLAYER_GOOD.")
-	event_creature = _labelled_picker(box, "Criatura dos herois")
+	studio._label(event_box, "Crie as duas areas no mapa antes de configurar o evento.\nEle dispara uma vez quando uma criatura do jogador escolhido entra na area.\nOs herois pertencem a PLAYER_GOOD; nao identifica uma criatura individual.\nO formulario nao carrega os valores anteriores: Aplicar substitui o evento Studio da area.")
+	event_creature = _labelled_picker(event_box, "Grupo 1: heroi")
 	for creature in refs.oScriptGenerator.get_creature_list():
-		_creature_option(event_creature, creature[0])
+		if not creature[3]:
+			_creature_option(event_creature, creature[0])
 	event_creature.select(max(0, event_creature.get_item_index(6)))
-	studio._label(box, "Quantidade / nivel")
+	studio._label(event_box, "Quantidade / nivel")
 	var row = HBoxContainer.new()
-	box.add_child(row)
+	event_box.add_child(row)
 	event_count = studio._spin(row, 1, 20, 3)
 	event_level = studio._spin(row, 1, 10, 3)
+	additional_heroes.clear()
+	for group in [2, 3]:
+		var picker = _labelled_picker(event_box, "Grupo %s: heroi opcional" % group)
+		picker.add_item("Nenhum", 999)
+		for creature in refs.oScriptGenerator.get_creature_list():
+			if not creature[3]:
+				_creature_option(picker, creature[0])
+		studio._label(event_box, "Quantidade / nivel")
+		var group_row = HBoxContainer.new()
+		event_box.add_child(group_row)
+		var amount = studio._spin(group_row, 1, 20, 1)
+		var level = studio._spin(group_row, 1, 10, 3)
+		additional_heroes.append({"picker": picker, "count": amount, "level": level})
+		picker.connect("item_selected", self, "_update_event_preview")
+		amount.connect("value_changed", self, "_update_event_preview")
+		level.connect("value_changed", self, "_update_event_preview")
 	event_preview = _text_preview(box)
-	for picker in [event_kind, enemy, trigger, destination, event_creature]:
+	for picker in [event_kind, trigger_player, trigger, destination, event_creature]:
 		picker.connect("item_selected", self, "_update_event_preview")
 	for spin in [event_count, event_level]:
 		spin.connect("value_changed", self, "_update_event_preview")
 	events.connect("confirmed", self, "_apply_event")
 	_update_event_preview()
 	_show(events)
+
+
+func _managed_goal_owners(source: String) -> Array:
+	var start = source.find("REM STUDIO-BEGIN GOAL")
+	var end = source.find("REM STUDIO-END GOAL")
+	var owners = []
+	if start < 0 or end <= start:
+		return owners
+	for call in patcher.parse(source.substr(start, end - start)).all_calls:
+		if call.command == "IF" and call.args.size() > 1 and call.args[1].replace(" ", "").to_upper() == "DUNGEON_DESTROYED==1":
+			for owner in [1, 2, 3, 6, 7, 8]:
+				if call.args[0] == _player_token(owner):
+					owners.append(owner)
+	return owners
 
 
 func managed_block(source: String, key: String, block: Array) -> Dictionary:
@@ -415,9 +465,15 @@ func event_result() -> Dictionary:
 	var key = "GOAL"
 	var block = []
 	if event_kind.selected == 0:
-		var owner = enemy.get_selected_id()
-		if owner == 0 or not refs.oInstances.check_for_dungeon_heart(owner) or not refs.oInstances.check_for_dungeon_heart(0):
-			return {"text": text, "error": "Escolha um adversario com coracao no mapa. O Vermelho tambem precisa de um coracao."}
+		var owners = []
+		for check in enemies:
+			if check.pressed:
+				var owner = check.get_meta("owner")
+				if not refs.oInstances.check_for_dungeon_heart(owner):
+					return {"text": text, "error": studio.OWNER_NAMES[owner] + " nao possui coracao no mapa."}
+				owners.append(owner)
+		if owners.empty() or not refs.oInstances.check_for_dungeon_heart(0):
+			return {"text": text, "error": "Marque pelo menos um adversario com coracao. O Vermelho tambem precisa de um coracao."}
 		# Replace only the generator's known default, never an arbitrary victory script.
 		text = patcher.set_block(text, ["IF(PLAYER0,ALL_DUNGEONS_DESTROYED == 1)", "\tWIN_GAME", "ENDIF"], false).text
 		var without_goal = managed_block(text, key, [])
@@ -427,7 +483,11 @@ func event_result() -> Dictionary:
 		win.compile("(?im)^\\s*WIN_GAME\\b")
 		if win.search(without_goal.text) != null:
 			return {"text": text, "error": "Ha outra vitoria personalizada no script. Ajuste-a em Regras antes de definir este objetivo; ela nao sera apagada automaticamente."}
-		block = ["IF(" + _player_token(owner) + ",DUNGEON_DESTROYED == 1)", "\tWIN_GAME", "ENDIF"]
+		for owner in owners:
+			block.append("\t".repeat(block.size()) + "IF(" + _player_token(owner) + ",DUNGEON_DESTROYED == 1)")
+		block.append("\t".repeat(owners.size()) + "WIN_GAME")
+		for index in range(owners.size() - 1, -1, -1):
+			block.append("\t".repeat(index) + "ENDIF")
 	elif event_kind.selected in [1, 3]:
 		if trigger.get_selected_id() < 1 or refs.oInstances.return_action_point(trigger.get_selected_id()) == null:
 			return {"text": text, "error": "Crie e selecione uma area de entrada valida."}
@@ -435,13 +495,27 @@ func event_result() -> Dictionary:
 		if event_kind.selected == 1:
 			if destination.get_selected_id() < 1 or refs.oInstances.return_action_point(destination.get_selected_id()) == null:
 				return {"text": text, "error": "Selecione uma area de surgimento valida."}
-			var area = refs.oInstances.return_action_point(destination.get_selected_id())
-			var slab = refs.oDataSlab.get_cell(int(area.locationX / 3), int(area.locationY / 3))
-			if not Slabs.data.has(slab) or Slabs.data[slab][Slabs.IS_SOLID] or slab == Slabs.LAVA:
-				return {"text": text, "error": "A area de surgimento precisa estar em terreno aberto e sem lava."}
+			for number in [trigger.get_selected_id(), destination.get_selected_id()]:
+				var area = refs.oInstances.return_action_point(number)
+				var slab = refs.oDataSlab.get_cell(int(area.locationX / 3), int(area.locationY / 3))
+				if not Slabs.data.has(slab) or Slabs.data[slab][Slabs.IS_SOLID] or slab in [Slabs.LAVA, Slabs.WATER]:
+					return {"text": text, "error": "As areas de entrada e surgimento precisam estar em terreno aberto e seco."}
+			if event_creature.get_selected_id() < 1:
+				return {"text": text, "error": "Escolha um heroi para o primeiro grupo."}
+			var total = int(event_count.value)
+			for group in additional_heroes:
+				if group.picker.get_selected_id() != 999:
+					total += int(group.count.value)
+			if refs.oCurrentFormat.selected == Constants.OldFormat and get_tree().get_nodes_in_group("Creature").size() + total > 255:
+				return {"text": text, "error": "A emboscada pode exceder o limite de 255 criaturas do Gold."}
 			var creature = Things.fetch_id_string(Things.TYPE.CREATURE, event_creature.get_selected_id())
-			block = ["IF_ACTION_POINT(%s,PLAYER0)" % trigger.get_selected_id(),
-				"\tADD_CREATURE_TO_LEVEL(PLAYER_GOOD,%s,%s,%s,%s,0)" % [creature, destination.get_selected_id(), int(event_count.value), int(event_level.value)], "ENDIF"]
+			block = ["IF_ACTION_POINT(%s,%s)" % [trigger.get_selected_id(), _player_token(trigger_player.get_selected_id())],
+				"\tADD_CREATURE_TO_LEVEL(PLAYER_GOOD,%s,%s,%s,%s,0)" % [creature, destination.get_selected_id(), int(event_count.value), int(event_level.value)]]
+			for group in additional_heroes:
+				if group.picker.get_selected_id() != 999:
+					var species = Things.fetch_id_string(Things.TYPE.CREATURE, group.picker.get_selected_id())
+					block.append("\tADD_CREATURE_TO_LEVEL(PLAYER_GOOD,%s,%s,%s,%s,0)" % [species, destination.get_selected_id(), int(group.count.value), int(group.level.value)])
+			block.append("ENDIF")
 	return managed_block(text, key, block)
 
 
@@ -450,11 +524,18 @@ func _update_event_preview(_value = 0):
 	event_preview.text = result.error if not result.error.empty() else result.text
 	event_preview.cursor_set_line(event_preview.get_line_count() - 1)
 	event_preview.center_viewport_to_cursor()
-	enemy.disabled = event_kind.selected != 0
-	for picker in [trigger, destination, event_creature]:
+	goal_box.visible = event_kind.selected == 0
+	event_box.visible = event_kind.selected in [1, 3]
+	for check in enemies:
+		check.disabled = event_kind.selected != 0
+	for picker in [trigger_player, trigger, destination, event_creature]:
 		picker.disabled = not event_kind.selected in [1, 3] or (event_kind.selected == 3 and picker != trigger)
 	event_count.editable = event_kind.selected == 1
 	event_level.editable = event_kind.selected == 1
+	for group in additional_heroes:
+		group.picker.disabled = event_kind.selected != 1
+		group.count.editable = event_kind.selected == 1 and group.picker.get_selected_id() != 999
+		group.level.editable = group.count.editable
 
 
 func _apply_event():

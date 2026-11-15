@@ -62,6 +62,22 @@ Studio nao sao requisitos deste editor.
 
 ## Paleta, inspecao e regras visuais
 
+No **Modo avancado**, o menu **Mapa** oferece acesso direto a criaturas,
+livros de feitico, itens especiais e areas de evento. Em **Regras**, use
+**Feiticos por jogador** para disponibilidade, **Objetivos e surgimento de
+herois** para eventos e vitoria, ou o assistente de missao encadeada. Livros
+sao itens colocados no mapa; disponibilidade de poderes e uma regra separada.
+
+No formulario de objetivos, marque todos os coracoes inimigos que devem ser
+destruidos: a vitoria so ocorre depois da destruicao de cada um deles. Para
+uma emboscada, coloque duas areas de evento em terreno aberto e seco, escolha
+a area de entrada, o jogador que a aciona, a area de nascimento e ate tres
+grupos de herois com tipo, quantidade e nivel. O evento ocorre uma vez quando
+qualquer criatura do jogador escolhido entra na area; nao identifica uma
+criatura individual. O formulario de eventos nao carrega escolhas anteriores;
+aplicar novamente substitui o evento Studio da mesma area. Salve o mapa e
+reinicie a fase para usar as regras.
+
 O painel possui abas **Mapa**, **Construir** e **Inspecionar**. Os atalhos
 Novo, Abrir, Salvar e Testar permanecem visiveis acima delas. A aba Mapa
 reune sincronizacao, exportacao, poderes e eventos; Construir concentra
@@ -93,10 +109,10 @@ a paleta; Inspecionar permite selecionar sem pintar por acidente.
   O raio e medido em subblocos (tres subblocos formam um bloco de terreno).
   No formato Gold, a colocacao respeita os numeros de area de 1 a 255.
   Em **Objetivos e eventos**, escolha a area de entrada do Vermelho,
-  a area de surgimento, criatura, quantidade e nivel dos herois.
+  a area de surgimento, criaturas, quantidades e niveis dos herois.
   Cada evento dispara uma vez. Reaplicar na mesma area atualiza o evento,
   sem duplicar o bloco; o formulario tambem permite remove-lo.
-- O objetivo visual **destruir um coracao inimigo** destina-se a partidas
+- O objetivo visual **destruir os coracoes escolhidos** destina-se a partidas
   individuais com o humano Vermelho. Substitui apenas a vitoria padrao
   "todos os inimigos"; nao apaga vitorias manuais desconhecidas. Remover
   esse objetivo nao restaura automaticamente outra condicao de vitoria.
